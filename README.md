@@ -126,6 +126,7 @@ ruff check frontend/ quant/ scripts/ tests/
 - Better models (GBDT) + broader feature set + factor diagnostics
 - Long/short portfolio construction with constraints (gross/net, caps, turnover, risk sizing)
 - Persistent portfolio storage (Supabase DB) + scheduled universe management
+- Raise test coverage target to 90%+ (currently gated at 50% to move fast; increase once core pipeline is stable)
 
 ## Disclaimer
 
