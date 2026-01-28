@@ -5,6 +5,8 @@ Usage:
   GROWW_API_KEY=... GROWW_API_SECRET=... python scripts/test_groww_source.py --symbol TCS --days 30
 """
 
+# ruff: noqa: E402  (sys.path bootstrap must run before local imports)
+
 from __future__ import annotations
 
 import argparse
@@ -56,7 +58,13 @@ def main() -> int:
     end_s = end.strftime("%Y-%m-%d 15:30:00")
 
     trading_symbol = args.symbol.replace(".NS", "").upper()
-    candles = get_candles_range(token, trading_symbol=trading_symbol, start_time=start_s, end_time=end_s, interval_in_minutes=1440)
+    candles = get_candles_range(
+        token,
+        trading_symbol=trading_symbol,
+        start_time=start_s,
+        end_time=end_s,
+        interval_in_minutes=1440,
+    )
     df = _candles_to_df(candles)
     if df.empty:
         print("FAIL: empty candles")

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Generate an India-first universe file from built-in symbol maps."""
 
+# ruff: noqa: E402  (sys.path bootstrap must run before local imports)
+
 from __future__ import annotations
 
-from pathlib import Path
-
 import sys
+from pathlib import Path
 
 sys.path.insert(0, "frontend")
 
@@ -29,4 +30,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
