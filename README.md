@@ -1,40 +1,65 @@
 # QuantOracle
 
-QuantOracle is a Streamlit-based quant research + portfolio intelligence app focused on **India equities** (with optional multi-asset extras). It combines:
-- interactive market charts + technical indicators
-- portfolio + risk analytics
-- an **EOD market screener** powered by a published feature snapshot + model artifacts (fast, deterministic UI)
+India-first quant research + portfolio intelligence app (Streamlit) with an EOD market screener pipeline.
 
-The key design choice: **no training inside Streamlit**. A scheduled job publishes "last-good" artifacts to Supabase; Streamlit only reads them.
+[![CI](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml)
+[![EOD Pipeline](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## What You Get
+## TL;DR
 
-### App (Streamlit)
-- Markets: candlesticks + indicators (RSI, MACD, SMAs, volatility)
-- Portfolio: holdings, P/L, rebalance suggestions
-- Risk: drawdown, beta/correlation, simple VaR-style metrics
-- Quant ML:
-  - Single Stock: fast on-demand baseline signals
-  - Market Screener (EOD): cross-sectional ranking from the published daily snapshot
+- UI: charts, portfolio, risk, and an ML page
+- EOD screener: daily snapshot + model artifacts published by GitHub Actions
+- Serving: Streamlit reads artifacts from Supabase Storage (fast, deterministic; no training in the UI)
 
-### EOD Screener Pipeline (recommended)
-- Data source: **Groww Trade API** (EOD candles for NSE cash)
-- Features: Parquet snapshot (DuckDB-readable)
-- Model: ridge regression baseline
-- Storage: **Supabase Storage** (public bucket for reads)
-- Scheduler: **GitHub Actions** (writer-only secret uploads)
+## Features
 
-## Tech Stack
+Markets
+- Interactive candlesticks + indicators (SMA, RSI, MACD, volatility)
+- Multi-timeframe views (best effort based on data-source availability)
 
-- Python 3.12
-- Streamlit + Plotly
-- pandas / numpy / requests
-- DuckDB (Parquet reads/writes)
-- Supabase Storage (artifact hosting)
-- pytest + ruff
-- GitHub Actions (daily publisher)
+Portfolio
+- Holdings, P/L, return metrics
+- Basic rebalance suggestions
 
-## Local Quick Start
+Risk
+- Max drawdown
+- Beta / correlation
+- VaR-style summary metrics
+
+Quant ML
+- Single Stock: fast, on-demand baseline signals
+- Market Screener (EOD): cross-sectional ranking across a universe (default: NIFTY 50)
+
+## How It Works (Production-Style)
+
+Streamlit Cloud storage is ephemeral. QuantOracle uses an artifact workflow:
+
+1) Publisher (GitHub Actions, after market close)
+- Fetches EOD candles (Groww Trade API)
+- Builds a feature snapshot (Parquet; DuckDB-readable)
+- Trains a baseline model (ridge)
+- Uploads artifacts to Supabase Storage
+
+2) UI (Streamlit Cloud)
+- Downloads `latest.json` + `features.parquet` + model files
+- Renders screener + ranks instantly
+
+"Last-good snapshot" rule: `latest.json` is uploaded last, only after all required files succeed.
+
+## Repository Layout
+
+```text
+frontend/          Streamlit app (pages, theme, services)
+quant/             Core analytics + features + model helpers
+scripts/           Publisher + diagnostics
+tests/             pytest suite
+streamlit_app.py   Streamlit Cloud entrypoint (repo root)
+data/universe/     Universe lists (tracked)
+```
+
+## Run Locally
 
 ```bash
 python3 -m venv venv
@@ -44,91 +69,68 @@ pip install -r requirements.txt
 streamlit run frontend/app.py
 ```
 
-## Configuration
-
-Create `.env` (optional for local dev):
-
-```env
-# Optional runtime keys (UI can run without these, but some live sources may be rate-limited)
-INDIANAPI_API_KEY=
-ALPHA_VANTAGE_API_KEY=
-NEWSDATA_API_KEY=
-
-# EOD screener reads (Streamlit Cloud uses these)
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_BUCKET=quantoracle-artifacts
-
-# Publisher-only (NEVER set in Streamlit Cloud)
-SUPABASE_SERVICE_ROLE_KEY=
-GROWW_API_KEY=
-GROWW_API_SECRET=
-```
-
 ## Deploy (Streamlit Cloud)
 
-Streamlit Cloud deploys from your GitHub repo (not your local machine). You must **commit + push**.
-
-1) Streamlit Cloud settings:
+App settings:
 - Main file path: `streamlit_app.py`
 - Python: 3.12
 
-2) Streamlit Cloud secrets (TOML):
-- `SUPABASE_URL`
-- `SUPABASE_BUCKET`
+Streamlit Cloud secrets (TOML):
+```toml
+SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+SUPABASE_BUCKET = "quantoracle-artifacts"
+```
 
-Do **not** put Groww keys or `SUPABASE_SERVICE_ROLE_KEY` into Streamlit Cloud.
+Do not put publisher secrets (Groww keys or `SUPABASE_SERVICE_ROLE_KEY`) into Streamlit Cloud.
 
-## Publish the Daily EOD Screener (GitHub Actions)
+## Enable the EOD Screener (Supabase + GitHub Actions)
 
-1) Create a Supabase Storage bucket (public):
-- Bucket: `quantoracle-artifacts`
-- Public: enabled
+1) Supabase Storage
+- Create bucket: `quantoracle-artifacts`
+- Set it to Public
 
-2) Add GitHub repo secrets (Settings -> Secrets and variables -> Actions):
+2) GitHub Actions secrets (repo Settings -> Secrets and variables -> Actions)
 - `SUPABASE_URL`
 - `SUPABASE_BUCKET`
 - `SUPABASE_SERVICE_ROLE_KEY` (writer-only)
 - `GROWW_API_KEY`
 - `GROWW_API_SECRET`
 
-3) Run the workflow once:
-- GitHub -> Actions -> **EOD Pipeline** -> **Run workflow**
+3) Run the publisher once
+- GitHub -> Actions -> EOD Pipeline -> Run workflow
 
-On success, Supabase will contain:
-- `eod/nifty50/latest.json`
-- `eod/nifty50/features.parquet`
-- `eod/nifty50/models/...`
+Artifacts will appear under:
+`/storage/v1/object/public/<bucket>/eod/nifty50/latest.json`
 
-Streamlit will automatically pick it up on refresh.
-
-## Manual Publisher (local)
+## Manual Publish (Local)
 
 ```bash
 python scripts/publish_eod.py \
   --universe-file data/universe/nifty50.txt \
   --universe-name nifty50 \
   --horizon 5 \
-  --provider groww
+  --provider groww \
+  --upload
 ```
 
-## Tests
+## Quality Gates
 
 ```bash
 pytest -q
+ruff check frontend/ quant/ scripts/ tests/
 ```
 
-## Roadmap (Real Quant ML)
+## Roadmap (Next-Level Quant)
 
-- Model registry + walk-forward evaluation reports
-- Stronger models (GBDT), better features, cross-sectional factor diagnostics
+- Walk-forward evaluation reports + model registry/versioning UI
+- Better models (GBDT) + broader feature set + factor diagnostics
 - Long/short portfolio construction with constraints (gross/net, caps, turnover, risk sizing)
-- Persistent portfolio storage (Supabase DB) and scheduled universe updates
+- Persistent portfolio storage (Supabase DB) + scheduled universe management
 
-## Notes / Disclaimer
+## Disclaimer
 
-- Not investment advice.
-- Data source availability and licensing vary by provider. NSE endpoints frequently block scraping; this repo avoids "scrape at runtime" for production reliability.
+Not investment advice. Data source availability and licensing vary by provider.
 
 ## License
 
-MIT (see `LICENSE`).
+MIT - see `LICENSE`.

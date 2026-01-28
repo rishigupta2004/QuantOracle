@@ -19,10 +19,12 @@ import streamlit as st
 import streamlit_shadcn_ui as ui
 from theme import apply_theme
 
-# Streamlit sets sys.path to the script directory (`frontend/`). Add repo root so `quant/` is importable.
+# When executed via repo-root `streamlit_app.py`, Streamlit's sys.path won't include `frontend/`.
+_FRONTEND = str(Path(__file__).resolve().parent)
 _ROOT = str(Path(__file__).resolve().parents[1])
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+for p in (_FRONTEND, _ROOT):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 apply_theme()
 
