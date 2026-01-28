@@ -1,0 +1,26 @@
+# India core universe (starter)
+# One symbol per line. Comments allowed.
+
+# Indices
+^NSEI
+^BSESN
+^NSEBANK
+^CNXIT
+
+# ETFs
+NIFTYBEES.NS
+GOLDBEES.NS
+BANKBEES.NS
+ITBEES.NS
+
+# Large caps
+RELIANCE.NS
+TCS.NS
+HDFCBANK.NS
+ICICIBANK.NS
+INFY.NS
+ITC.NS
+LT.NS
+SBIN.NS
+BHARTIARTL.NS
+SUNPHARMA.NS

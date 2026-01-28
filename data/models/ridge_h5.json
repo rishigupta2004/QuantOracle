@@ -1,0 +1,20 @@
+{
+  "model": "ridge",
+  "horizon": 5,
+  "alpha": 10.0,
+  "features": [
+    "ret_1d",
+    "ret_5d",
+    "ret_20d",
+    "vol_20d",
+    "price_sma20",
+    "price_sma50",
+    "price_sma200",
+    "rsi_14"
+  ],
+  "cutoff": "2024-08-31",
+  "rows_train": 90,
+  "rows_test": 22,
+  "ic": 0.9999999722715859,
+  "hit_rate": 0.0
+}

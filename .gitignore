@@ -1,0 +1,58 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+.env/
+.env.example/
+.env.example
+
+# Cache files
+.cache/
+*.cache
+*.log
+
+# Test coverage reports
+htmlcov/
+.coverage
+*.cover
+
+# Pytest cache
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Streamlit cache
+.streamlit/
+
+# Local environment variables
+.env
+*.env
+
+# IDE specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+*.wheel
+
+# Frontend build files
+frontend/.streamlit/
+frontend/__pycache__/
+frontend/.cache/

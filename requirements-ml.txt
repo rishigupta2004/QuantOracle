@@ -1,0 +1,7 @@
+# Training-only dependencies (not required for Streamlit runtime).
+#
+# For Phase 3 we keep training minimal (numpy-based ridge), so this can stay empty.
+# Add heavy libs here later (lightgbm/xgboost/torch, etc.) without bloating Streamlit deploys.
+
+scikit-learn==1.5.2
+joblib==1.4.2
