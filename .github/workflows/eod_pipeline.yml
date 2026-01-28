@@ -28,6 +28,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+          GROWW_API_KEY: ${{ secrets.GROWW_API_KEY }}
+          GROWW_API_SECRET: ${{ secrets.GROWW_API_SECRET }}
         run: |
-          python scripts/publish_eod.py --universe-file data/universe/nifty50.txt --universe-name nifty50 --horizon 5 --upload
+          python scripts/publish_eod.py --universe-file data/universe/nifty50.txt --universe-name nifty50 --horizon 5 --provider groww --upload

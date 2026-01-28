@@ -32,14 +32,18 @@ import duckdb
 import numpy as np
 import pandas as pd
 import requests
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+load_dotenv()
+
 from quant.features import build_features, build_targets
 from quant.registry import data_root, model_version_dir, save_meta, version_id, write_latest
 from quant.ridge import fit_ridge, predict, zscore_apply, zscore_fit
+from scripts.groww_api import GrowwAuth, get_access_token, get_candles_range
 from scripts.supabase_storage import from_env
 
 
@@ -77,6 +81,7 @@ class EODHD(Provider):
     def __init__(self, api_token: str):
         super().__init__(name="eodhd")
         self.api_token = api_token
+        self._warned = 0
 
     def history(self, sym: str, *, days: int) -> pd.DataFrame:
         # EODHD uses EXCHANGE suffix, e.g. RELIANCE.NSE.
@@ -94,11 +99,18 @@ class EODHD(Provider):
         try:
             r = requests.get(url, params=params, timeout=30)
             if r.status_code != 200:
+                if self._warned < 3:
+                    self._warned += 1
+                    print(f"EODHD {ticker} -> {r.status_code}: {(r.text or '')[:200]}")
                 return pd.DataFrame()
             data = r.json() or []
         except Exception:
             return pd.DataFrame()
         if not isinstance(data, list) or not data:
+            if self._warned < 3:
+                self._warned += 1
+                s = data if isinstance(data, dict) else {"response": str(type(data))}
+                print(f"EODHD {ticker} -> empty/non-list: {str(s)[:200]}")
             return pd.DataFrame()
         df = pd.DataFrame(data)
         if "date" not in df or "close" not in df:
@@ -109,6 +121,51 @@ class EODHD(Provider):
         if "volume" in df:
             out["Volume"] = pd.to_numeric(df["volume"], errors="coerce")
         return out.dropna()
+
+
+class Groww(Provider):
+    def __init__(self, api_key: str, api_secret: str):
+        super().__init__(name="groww")
+        self._auth = GrowwAuth(api_key=api_key, api_secret=api_secret)
+        self._token: str | None = None
+        self._warned = 0
+
+    def _token_get(self) -> str:
+        if self._token:
+            return self._token
+        self._token = get_access_token(self._auth)
+        return self._token
+
+    def history(self, sym: str, *, days: int) -> pd.DataFrame:
+        trading_symbol = sym.replace(".NS", "").upper()
+        end = datetime.now()
+        start = end - timedelta(days=int(days) + 7)  # pad for weekends/holidays
+        start_s = start.strftime("%Y-%m-%d 09:15:00")
+        end_s = end.strftime("%Y-%m-%d 15:30:00")
+
+        try:
+            candles = get_candles_range(
+                self._token_get(),
+                trading_symbol=trading_symbol,
+                start_time=start_s,
+                end_time=end_s,
+                interval_in_minutes=1440,
+            )
+        except Exception as e:
+            if self._warned < 3:
+                self._warned += 1
+                print(f"Groww {trading_symbol} -> {str(e)[:200]}")
+            return pd.DataFrame()
+
+        if not candles:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(candles, columns=["ts", "Open", "High", "Low", "Close", "Volume"])
+        df["ts"] = pd.to_datetime(df["ts"], unit="s", utc=True).dt.tz_convert("Asia/Kolkata").dt.tz_localize(None)
+        df = df.set_index("ts").sort_index()
+        df.index = pd.to_datetime(df.index.date)  # normalize to date
+        df = df.apply(pd.to_numeric, errors="coerce").dropna(subset=["Close"])
+        return df
 
 
 def _read_universe(path: Path) -> list[str]:
@@ -140,9 +197,8 @@ def _build_feature_table(universe: Iterable[str], provider: Provider, *, horizon
         if f.empty:
             continue
         y = build_targets(h["Close"], horizon=horizon).reindex(f.index)
-        f = f.assign(symbol=sym, target=y).dropna()
-        if f.empty:
-            continue
+        # Keep the latest feature rows even though their forward target is NaN.
+        f = f.assign(symbol=sym, target=y)
         rows.append(f.reset_index().rename(columns={"index": "Date"}))
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
@@ -205,7 +261,7 @@ def main() -> int:
     ap.add_argument("--horizon", type=int, default=5)
     ap.add_argument("--alpha", type=float, default=10.0)
     ap.add_argument("--history-days", type=int, default=365, help="History window to fetch per symbol")
-    ap.add_argument("--provider", choices=["auto", "eodhd", "yfinance"], default="auto")
+    ap.add_argument("--provider", choices=["auto", "groww", "eodhd", "yfinance"], default="auto")
     ap.add_argument("--upload", action="store_true", help="Upload artifacts to Supabase Storage")
     ap.add_argument("--prefix", default="", help="Remote prefix (default: eod/<universe-name>)")
     args = ap.parse_args()
@@ -215,11 +271,20 @@ def main() -> int:
         raise SystemExit("Empty universe file")
 
     eodhd_key = (os.getenv("EODHD_API_KEY") or "").strip()
+    groww_key = (os.getenv("GROWW_API_KEY") or "").strip()
+    groww_secret = (os.getenv("GROWW_API_SECRET") or "").strip()
     providers: list[Provider] = []
+    if args.provider in ("auto", "groww") and groww_key and groww_secret:
+        providers.append(Groww(groww_key, groww_secret))
     if args.provider in ("auto", "eodhd") and eodhd_key:
         providers.append(EODHD(eodhd_key))
     if args.provider in ("auto", "yfinance") or not providers:
         providers.append(YFinance())
+
+    if args.provider in ("auto", "groww") and not (groww_key and groww_secret):
+        print("Note: GROWW_API_KEY/GROWW_API_SECRET not set; skipping Groww.")
+    if args.provider in ("auto", "eodhd") and not eodhd_key:
+        print("Note: EODHD_API_KEY not set; skipping EODHD.")
 
     df = pd.DataFrame()
     used = None

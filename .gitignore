@@ -1,64 +1,41 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
 *.pyd
 
-# Virtual environment
+# Virtualenv
 venv/
 .venv/
-.env/
-.env.example/
-.env.example
 
-# Cache files
+# Secrets
+.env
+.streamlit/secrets.toml
+
+# Caches / tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .cache/
-*.cache
 *.log
-
-# Test coverage reports
 htmlcov/
 .coverage
-*.cover
+coverage.xml
 
-# Pytest cache
-.pytest_cache/
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
-
-# Streamlit cache
-.streamlit/
-
-# Local environment variables
-.env
-*.env
-
-# IDE specific files
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
-
-# OS generated files
+# OS / IDE
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
 
-# Build artifacts
+# Build
 build/
 dist/
 *.egg-info/
-*.egg
-*.whl
-*.wheel
 
-# Frontend build files
-frontend/.streamlit/
-frontend/__pycache__/
-frontend/.cache/
-
-
-cv.md
-CONTRACT.md
-STREAMLIT_DEPLOY.md
-MODELS.md
+# QuantOracle generated data (keep `data/universe/*` tracked)
+data/ohlcv/
+data/features.parquet
+data/eod_latest.json
+data/models/
+CV.md 
+CV.md/*
