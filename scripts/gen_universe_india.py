@@ -17,15 +17,20 @@ def main():
     out = Path("data/universe/india_full.txt")
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    indices = ["^NSEI", "^BSESN", "^NSEBANK", "^CNXIT"]
+    index_proxies = [
+        "NIFTYBEES.NS",
+        "BANKBEES.NS",
+        "ITBEES.NS",
+        "GOLDBEES.NS",
+    ]
     lines = []
     lines += ["# Auto-generated. Edit if you want.", ""]
-    lines += ["# Indices"] + indices + [""]
+    lines += ["# Index proxies (tradable ETFs)"] + index_proxies + [""]
     lines += ["# ETFs"] + sorted(ETF.keys()) + [""]
     lines += ["# Stocks"] + sorted(STOCK.keys()) + [""]
 
     out.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {out} ({len(indices) + len(ETF) + len(STOCK)} symbols)")
+    print(f"Wrote {out} ({len(index_proxies) + len(ETF) + len(STOCK)} symbols)")
 
 
 if __name__ == "__main__":

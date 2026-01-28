@@ -12,7 +12,7 @@ DEFAULT_WATCHLIST = {
     "us": ["AAPL", "MSFT", "NVDA", "GOOGL", "META", "TSLA"],
     "crypto": ["BTC-USD", "ETH-USD", "SOL-USD"],
     "forex": ["USDINR=X", "EURUSD=X"],
-    "indices": ["^NSEI", "^GSPC"],
+    "indices": ["NIFTYBEES.NS", "^GSPC"],
 }
 
 LATENCY_THRESHOLDS = {

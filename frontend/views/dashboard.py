@@ -21,14 +21,11 @@ POPULAR_STOCKS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.
 
 POPULAR_CRYPTO = ["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "XRP-USD"]
 
-INDICES = {
-    "^NSEI": "NIFTY 50",
-    "^BSESN": "SENSEX",
-    "^NSEBANK": "NIFTY BANK",
-    "^CNXIT": "NIFTY IT",
-    "^GSPC": "S&P 500",
-    "BTC-USD": "Bitcoin",
-    "GC=F": "Gold",
+INDEX_PROXIES = {
+    "NIFTYBEES.NS": "NIFTY 50",
+    "BANKBEES.NS": "NIFTY BANK",
+    "ITBEES.NS": "NIFTY IT",
+    "GOLDBEES.NS": "GOLD",
 }
 
 
@@ -102,30 +99,33 @@ def main():
     nse, us, tm = _status()
     st.title("📈 QuantOracle")
 
+    tile_stocks = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS"]
+    tile_proxies = list(INDEX_PROXIES.keys())
+    tile_syms = tile_proxies + tile_stocks
+
     # Market overview metrics
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-
     with st.spinner("Loading market quotes..."):
-        snap = get_quotes(["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS"])
+        snap = get_quotes(tile_syms)
 
-    with c1:
-        q = snap.get("RELIANCE.NS", {})
-        st.metric("RELIANCE", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
-    with c2:
-        q = snap.get("TCS.NS", {})
-        st.metric("TCS", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
-    with c3:
-        q = snap.get("HDFCBANK.NS", {})
-        st.metric("HDFCBANK", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
-    with c4:
-        q = snap.get("ICICIBANK.NS", {})
-        st.metric("ICICIBANK", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
-    with c5:
-        q = snap.get("INFY.NS", {})
-        st.metric("INFY", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
-    with c6:
-        q = snap.get("ITC.NS", {})
-        st.metric("ITC", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
+    p1, p2, p3, p4 = st.columns(4)
+    for col, sym in zip([p1, p2, p3, p4], tile_proxies):
+        q = snap.get(sym, {})
+        with col:
+            st.metric(
+                INDEX_PROXIES.get(sym, sym),
+                f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—",
+                f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—",
+            )
+
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    for col, sym in zip([c1, c2, c3, c4, c5, c6], tile_stocks):
+        q = snap.get(sym, {})
+        with col:
+            st.metric(
+                sym.replace(".NS", ""),
+                f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—",
+                f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—",
+            )
 
     st.markdown("---")
 
@@ -140,7 +140,7 @@ def main():
         with c_sym:
             symbol = st.selectbox(
                 "Select Symbol",
-                options=POPULAR_STOCKS + POPULAR_CRYPTO,
+                options=tile_proxies + POPULAR_STOCKS + POPULAR_CRYPTO,
                 index=0,
                 help="Choose any Indian or US stock, or cryptocurrency",
             )

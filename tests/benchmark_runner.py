@@ -193,7 +193,7 @@ class BenchmarkRunner:
             self.results["analytics"]["max_drawdown"] = t
             print(f"   Max Drawdown: {t:.1f}ms")
 
-            history["^NSEI"] = pd.DataFrame(
+            history["NIFTYBEES.NS"] = pd.DataFrame(
                 {"Close": [1000 + i * 2 for i in range(50)]}
             )
             t = self._time_fn(lambda: beta(holdings, history))

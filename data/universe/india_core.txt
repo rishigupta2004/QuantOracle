@@ -1,17 +1,15 @@
 # India core universe (starter)
 # One symbol per line. Comments allowed.
 
-# Indices
-^NSEI
-^BSESN
-^NSEBANK
-^CNXIT
-
-# ETFs
+# Index proxies (tradable ETFs)
 NIFTYBEES.NS
-GOLDBEES.NS
 BANKBEES.NS
 ITBEES.NS
+JUNIORBEES.NS
+MIDCAPBEES.NS
+SMLCAPBEES.NS
+LIQUIDBEES.NS
+GOLDBEES.NS
 
 # Large caps
 RELIANCE.NS

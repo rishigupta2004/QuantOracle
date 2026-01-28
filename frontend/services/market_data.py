@@ -23,12 +23,21 @@ CACHE_QUOTE_S = 60
 CACHE_HISTORY_S = 1800
 
 
+INDEX_PROXY = {
+    "^NSEI": "NIFTYBEES.NS",
+    "^NSEBANK": "BANKBEES.NS",
+    "^CNXIT": "ITBEES.NS",
+}
+
+
 def _is_india_symbol(sym: str) -> bool:
     return sym.endswith(".NS") or sym.endswith(".BO") or sym.startswith("^NSE") or sym.startswith("^BSE")
 
 
 def normalize_symbol(sym: str) -> str:
     sym = sym.strip().upper()
+    if sym in INDEX_PROXY:
+        return INDEX_PROXY[sym]
     if sym.endswith((".NS", ".BO")):
         return sym
     if sym in ETF or sym in STOCK:

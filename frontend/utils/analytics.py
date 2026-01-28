@@ -81,13 +81,16 @@ def max_drawdown(history: Dict) -> float:
         return 0.0
 
 
-def beta(holdings: List[Dict], history: Dict, market: str = "^NSEI") -> Dict:
+def beta(holdings: List[Dict], history: Dict, market: str = "NIFTYBEES.NS") -> Dict:
     if not holdings or not history:
         return {"beta": 1.0, "corr": 0.5}
     try:
-        from services.market_data import get_historical
+        from services.market_data import get_historical, normalize_symbol
 
-        mkt = get_historical(market, "1y")
+        market = normalize_symbol(market)
+        mkt = history.get(market, pd.DataFrame())
+        if mkt.empty:
+            mkt = get_historical(market, "1y")
         if mkt.empty:
             return {"beta": 1.0, "corr": 0.5}
         mret = _safe_close(mkt["Close"]).pct_change().dropna()

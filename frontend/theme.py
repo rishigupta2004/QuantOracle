@@ -31,6 +31,12 @@ THEME = {
     [data-testid="stMetricValue"] {
         color: #FAFAFA !important;
         font-weight: 600;
+        /* Streamlit truncates values with ellipses in tight layouts; reduce and allow wrap. */
+        font-size: 1.6rem !important;
+        line-height: 1.15 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
     [data-testid="stMetricLabel"] {
         color: #A3A3A3 !important;

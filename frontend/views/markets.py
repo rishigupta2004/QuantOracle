@@ -7,6 +7,10 @@
 
 """Markets - Charts, Search, Technical Analysis"""
 
+from __future__ import annotations
+
+from pathlib import Path
+
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -34,6 +38,25 @@ TF = {
     "1Y": "1y",
     "5Y": "5y",
 }
+
+_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _tracked_universe(name: str = "nifty50") -> dict[str, str]:
+    """Return tracked symbols (published EOD) -> display name.
+
+    Streamlit Cloud should prefer the published universe to avoid yfinance rate limits.
+    """
+    p = _ROOT / "data" / "universe" / f"{name}.txt"
+    if not p.exists():
+        return {}
+    syms: list[str] = []
+    for ln in p.read_text(encoding="utf-8").splitlines():
+        s = ln.strip()
+        if not s or s.startswith("#"):
+            continue
+        syms.append(s.upper())
+    return {s: (STOCK.get(s) or ETF.get(s) or s) for s in syms}
 
 
 def _chart(sym: str, tf: str, *, key: str):
@@ -394,7 +417,8 @@ def main():
                 st.markdown("---")
 
     with tabs[1]:  # Stocks
-        _render_stock_list(STOCK, "stocks", "NSE Stocks")
+        tracked = _tracked_universe("nifty50")
+        _render_stock_list(tracked or STOCK, "stocks", "Tracked Universe (EOD)")
         _render_chart_section("stocks")
 
     with tabs[2]:  # ETFs

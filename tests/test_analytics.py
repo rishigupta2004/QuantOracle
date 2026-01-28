@@ -44,7 +44,7 @@ class TestAnalytics:
         """Test beta calculation"""
         history = {
             "RELIANCE.NS": pd.DataFrame({"Close": [100 + i for i in range(100)]}),
-            "^NSEI": pd.DataFrame({"Close": [1000 + i * 2 for i in range(100)]}),
+            "NIFTYBEES.NS": pd.DataFrame({"Close": [1000 + i * 2 for i in range(100)]}),
         }
         result = analytics["beta"](sample_holdings, history)
         assert "beta" in result, "Should have beta"
