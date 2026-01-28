@@ -24,7 +24,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -82,7 +82,7 @@ class EODHD(Provider):
         # EODHD uses EXCHANGE suffix, e.g. RELIANCE.NSE.
         ticker = sym.replace(".NS", ".NSE")
         to_dt = datetime.now(timezone.utc).date()
-        from_dt = (to_dt - pd.Timedelta(days=days + 7)).date()  # pad for weekends/holidays
+        from_dt = to_dt - timedelta(days=int(days) + 7)  # pad for weekends/holidays
         url = f"https://eodhd.com/api/eod/{ticker}"
         params = {
             "api_token": self.api_token,
