@@ -2,51 +2,66 @@
 
 India-first quant research + portfolio intelligence app (Streamlit) with an EOD market screener pipeline.
 
+[Live app (Streamlit Cloud)](https://quantoracle-7udw2wxfmnspu4swpjlykc.streamlit.app) 
+
 [![CI](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml)
 [![EOD Pipeline](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml)
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## TL;DR
+## What’s Inside
 
-- UI: charts, portfolio, risk, and an ML page
-- EOD screener: daily snapshot + model artifacts published by GitHub Actions
-- Serving: Streamlit reads artifacts from Supabase Storage (fast, deterministic; no training in the UI)
+- **Markets**: candlesticks + indicators + symbol search (India-first)
+- **Portfolio**: holdings, P/L, simple rebalance suggestions
+- **Risk**: VaR, max drawdown, beta/correlation
+- **Quant ML**:
+  - single-stock baselines (on-demand)
+  - EOD market screener (published snapshot after close; fast + deterministic in the UI)
 
-## Features
+## Data (Practical Coverage)
 
-Markets
-- Interactive candlesticks + indicators (SMA, RSI, MACD, volatility)
-- Multi-timeframe views (best effort based on data-source availability)
+- **NSE cash equities + ETFs (EOD)**: designed to work reliably via the Groww Trade API publisher
+- **Indices**: shown via **tradable ETF proxies** (e.g., `NIFTYBEES.NS`, `BANKBEES.NS`, `ITBEES.NS`)
+- **Global tickers / crypto**: best-effort via Yahoo (UI convenience / fallback)
 
-Portfolio
-- Holdings, P/L, return metrics
-- Basic rebalance suggestions
+## Machine Learning
 
-Risk
-- Max drawdown
-- Beta / correlation
-- VaR-style summary metrics
+### Single Stock (On-Demand Baselines)
+- **Moving Average**: SMA20/SMA50 crossover signal
+- **Multi-factor Technical Score**: combines indicators (RSI / trend / volatility-style heuristics)
+- **Mean Reversion**: Bollinger Bands + RSI oversold/overbought logic
 
-Quant ML
-- Single Stock: fast, on-demand baseline signals
-- Market Screener (EOD): cross-sectional ranking across a universe (default: NIFTY 50)
+### EOD Market Screener (Published)
+- **Model**: ridge regression (closed-form; no sklearn dependency)
+- **Target**: predicted forward return (default horizon: 5 trading days)
+- **Features (lightweight + robust)**: recent returns (1d/5d/20d), 20d volatility, price vs SMA20/SMA50, RSI14
+- **Outputs**: top/bottom ranks + a constraint-based long/short portfolio
 
-## How It Works (Production-Style)
+## Risk + Quant Portfolio
 
-Streamlit Cloud storage is ephemeral. QuantOracle uses an artifact workflow:
+- **VaR (95/99)**: daily-loss estimate from the return distribution
+- **Max drawdown**: largest peak-to-trough fall over the lookback window
+- **Beta / correlation**: market sensitivity vs an India market proxy (`NIFTYBEES.NS`)
+- **Long/short construction (EOD)**: constraints for gross/net exposure + max per-name weight
 
-1) Publisher (GitHub Actions, after market close)
-- Fetches EOD candles (Groww Trade API)
-- Builds a feature snapshot (Parquet; DuckDB-readable)
-- Trains a baseline model (ridge)
-- Uploads artifacts to Supabase Storage
+## Visuals (Illustrative)
 
-2) UI (Streamlit Cloud)
-- Downloads `latest.json` + `features.parquet` + model files
-- Renders screener + ranks instantly
+These example visuals show the kind of outputs QuantOracle produces (not a claim about any specific ticker’s future performance).
 
-"Last-good snapshot" rule: `latest.json` is uploaded last, only after all required files succeed.
+![Signal example](docs/images/example_signal.svg)
+
+![Screener example](docs/images/example_screener.svg)
+
+![Risk example](docs/images/example_risk.svg)
+
+## Architecture (EOD Pipeline)
+
+Streamlit Cloud storage is ephemeral, so QuantOracle uses a published-artifacts workflow:
+
+- **Publisher (GitHub Actions, after close)**: fetches EOD candles (Groww), builds a feature snapshot, trains a ridge model, uploads artifacts
+- **UI (Streamlit Cloud)**: downloads `latest.json` + `features.parquet` + model files and renders instantly (no training in the UI)
+
+![Architecture diagram](docs/images/architecture.svg)
 
 ## Repository Layout
 
@@ -57,67 +72,6 @@ scripts/           Publisher + diagnostics
 tests/             pytest suite
 streamlit_app.py   Streamlit Cloud entrypoint (repo root)
 data/universe/     Universe lists (tracked)
-```
-
-## Run Locally
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-streamlit run frontend/app.py
-```
-
-## Deploy (Streamlit Cloud)
-
-App settings:
-- Main file path: `streamlit_app.py`
-- Python: 3.12
-
-Streamlit Cloud secrets (TOML):
-```toml
-SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
-SUPABASE_BUCKET = "quantoracle-artifacts"
-```
-
-Do not put publisher secrets (Groww keys or `SUPABASE_SERVICE_ROLE_KEY`) into Streamlit Cloud.
-
-## Enable the EOD Screener (Supabase + GitHub Actions)
-
-1) Supabase Storage
-- Create bucket: `quantoracle-artifacts`
-- Set it to Public
-
-2) GitHub Actions secrets (repo Settings -> Secrets and variables -> Actions)
-- `SUPABASE_URL`
-- `SUPABASE_BUCKET`
-- `SUPABASE_SERVICE_ROLE_KEY` (writer-only)
-- `GROWW_API_KEY`
-- `GROWW_API_SECRET`
-
-3) Run the publisher once
-- GitHub -> Actions -> EOD Pipeline -> Run workflow
-
-Artifacts will appear under:
-`/storage/v1/object/public/<bucket>/eod/nifty50/latest.json`
-
-## Manual Publish (Local)
-
-```bash
-python scripts/publish_eod.py \
-  --universe-file data/universe/nifty50.txt \
-  --universe-name nifty50 \
-  --horizon 5 \
-  --provider groww \
-  --upload
-```
-
-## Quality Gates
-
-```bash
-pytest -q
-ruff check frontend/ quant/ scripts/ tests/
 ```
 
 ## Roadmap (Next-Level Quant)

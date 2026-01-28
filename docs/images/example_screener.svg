@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-label="Example EOD screener chart (top/bottom predicted returns)">
+  <defs>
+    <style>
+      .bg{fill:#0b1220}
+      .panel{fill:#0f172a;stroke:#223155;stroke-width:2}
+      .title{fill:#e5e7eb;font:700 18px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+      .txt{fill:#cbd5e1;font:500 13px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+      .axis{stroke:#334155;stroke-width:2}
+      .grid{stroke:#1f2a44;stroke-width:1}
+      .g{fill:#22c55e}
+      .r{fill:#ef4444}
+      .lbl{fill:#94a3b8;font:600 11px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="520"/>
+  <rect class="panel" x="40" y="60" width="1120" height="420" rx="18"/>
+  <text class="title" x="70" y="105">Illustrative EOD screener: Top/Bottom predicted returns (ridge)</text>
+  <text class="txt" x="70" y="130">Example only — demonstrates ranking output, not any live forecast guarantee.</text>
+
+  <!-- grid + axes -->
+  <line class="grid" x1="90" y1="180" x2="1120" y2="180"/>
+  <line class="grid" x1="90" y1="240" x2="1120" y2="240"/>
+  <line class="grid" x1="90" y1="300" x2="1120" y2="300"/>
+  <line class="grid" x1="90" y1="360" x2="1120" y2="360"/>
+  <line class="axis" x1="90" y1="410" x2="1120" y2="410"/>
+  <line class="axis" x1="90" y1="160" x2="90" y2="410"/>
+
+  <!-- zero line -->
+  <line class="grid" x1="90" y1="310" x2="1120" y2="310" stroke="#60a5fa"/>
+  <text class="lbl" x="96" y="304">0%</text>
+
+  <!-- bars: 5 top (green), 5 bottom (red); baseline at y=310 -->
+  <!-- Top -->
+  <rect class="g" x="150" y="250" width="60" height="60" rx="8"/>
+  <rect class="g" x="230" y="230" width="60" height="80" rx="8"/>
+  <rect class="g" x="310" y="210" width="60" height="100" rx="8"/>
+  <rect class="g" x="390" y="200" width="60" height="110" rx="8"/>
+  <rect class="g" x="470" y="185" width="60" height="125" rx="8"/>
+
+  <!-- Bottom -->
+  <rect class="r" x="690" y="310" width="60" height="70" rx="8"/>
+  <rect class="r" x="770" y="310" width="60" height="85" rx="8"/>
+  <rect class="r" x="850" y="310" width="60" height="105" rx="8"/>
+  <rect class="r" x="930" y="310" width="60" height="120" rx="8"/>
+  <rect class="r" x="1010" y="310" width="60" height="140" rx="8"/>
+
+  <!-- labels -->
+  <text class="lbl" x="150" y="432">TOP1</text>
+  <text class="lbl" x="230" y="432">TOP2</text>
+  <text class="lbl" x="310" y="432">TOP3</text>
+  <text class="lbl" x="390" y="432">TOP4</text>
+  <text class="lbl" x="470" y="432">TOP5</text>
+
+  <text class="lbl" x="690" y="432">BOT1</text>
+  <text class="lbl" x="770" y="432">BOT2</text>
+  <text class="lbl" x="850" y="432">BOT3</text>
+  <text class="lbl" x="930" y="432">BOT4</text>
+  <text class="lbl" x="1010" y="432">BOT5</text>
+
+  <text class="txt" x="150" y="170">Higher predicted return</text>
+  <text class="txt" x="690" y="170">Lower predicted return</text>
+</svg>
+

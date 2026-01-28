@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-label="Example risk visuals (equity curve + drawdown)">
+  <defs>
+    <style>
+      .bg{fill:#0b1220}
+      .panel{fill:#0f172a;stroke:#223155;stroke-width:2}
+      .title{fill:#e5e7eb;font:700 18px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+      .txt{fill:#cbd5e1;font:500 13px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+      .axis{stroke:#334155;stroke-width:2}
+      .grid{stroke:#1f2a44;stroke-width:1}
+      .eq{fill:none;stroke:#22c55e;stroke-width:3}
+      .ddFill{fill:rgba(239,68,68,0.25);stroke:#ef4444;stroke-width:2}
+      .lbl{fill:#94a3b8;font:600 11px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="620"/>
+  <rect class="panel" x="40" y="60" width="1120" height="520" rx="18"/>
+  <text class="title" x="70" y="105">Illustrative risk visuals: equity curve + drawdown</text>
+  <text class="txt" x="70" y="130">Example only — shows the metrics the Risk page explains (drawdown / volatility intuition).</text>
+
+  <!-- Equity curve chart -->
+  <text class="txt" x="70" y="170">Equity curve</text>
+  <line class="axis" x1="90" y1="340" x2="1120" y2="340"/>
+  <line class="axis" x1="90" y1="200" x2="90" y2="340"/>
+  <line class="grid" x1="90" y1="230" x2="1120" y2="230"/>
+  <line class="grid" x1="90" y1="260" x2="1120" y2="260"/>
+  <line class="grid" x1="90" y1="290" x2="1120" y2="290"/>
+  <path class="eq" d="M 90 315
+    C 170 305, 230 300, 290 290
+    C 350 280, 420 270, 480 275
+    C 540 280, 580 260, 640 255
+    C 700 250, 760 240, 820 245
+    C 880 250, 940 230, 1000 220
+    C 1060 210, 1100 205, 1120 200"/>
+  <text class="lbl" x="98" y="195">↑</text>
+  <text class="lbl" x="108" y="195">higher value</text>
+
+  <!-- Drawdown chart -->
+  <text class="txt" x="70" y="395">Drawdown (peak-to-trough)</text>
+  <line class="axis" x1="90" y1="540" x2="1120" y2="540"/>
+  <line class="axis" x1="90" y1="410" x2="90" y2="540"/>
+  <line class="grid" x1="90" y1="440" x2="1120" y2="440"/>
+  <line class="grid" x1="90" y1="470" x2="1120" y2="470"/>
+  <line class="grid" x1="90" y1="500" x2="1120" y2="500"/>
+
+  <!-- drawdown area (baseline at 440) -->
+  <path class="ddFill" d="M 90 440
+    C 150 440, 200 455, 260 465
+    C 320 475, 360 505, 420 520
+    C 480 535, 540 520, 600 500
+    C 660 480, 720 475, 780 460
+    C 840 445, 900 455, 960 470
+    C 1020 485, 1080 465, 1120 450
+    L 1120 440 L 90 440 Z"/>
+  <text class="lbl" x="98" y="410">0%</text>
+  <text class="lbl" x="98" y="555">more drawdown →</text>
+</svg>
+
