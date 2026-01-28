@@ -1,12 +1,3 @@
-# QuantOracle
-
-# HARD CODED IMPORTANT RULE: Keep code concise and meaningful
-# - Remove unwanted/junky code and unnecessary lines
-# - Each line must be valuable and to the point
-# - Avoid bloated, illogical code - prefer 100 clean lines over 10000 junk lines
-# - Author: Rishi Gupta
-# - License: MIT
-
 <div align="center">
 
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.28-FF4B4B?style=for-the-badge&logo=streamlit)
