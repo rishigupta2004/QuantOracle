@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: quantoracle
+    env: docker
+    autoDeploy: true
+    plan: starter
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_BUCKET
+        sync: false
