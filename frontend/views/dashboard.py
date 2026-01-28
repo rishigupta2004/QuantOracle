@@ -17,22 +17,7 @@ from utils.news_service import market_news
 
 # SET_PAGE_CONFIG_FIX_REMOVED
 
-POPULAR_STOCKS = [
-    # Major Indices
-    "^NSEI",  # NIFTY 50
-    "^BSESN",  # SENSEX
-    "^NSEBANK",  # NIFTY BANK
-    "^CNXIT",  # NIFTY IT
-    "NIFTY_FIN_SERVICE.NS",  # FINNIFTY
-    # Popular Stocks
-    "RELIANCE.NS",
-    "TCS.NS",
-    "HDFCBANK.NS",
-    "ICICIBANK.NS",
-    "AAPL",
-    "MSFT",
-    "NVDA",
-]
+POPULAR_STOCKS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "AAPL", "MSFT", "NVDA"]
 
 POPULAR_CRYPTO = ["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "XRP-USD"]
 
@@ -121,47 +106,26 @@ def main():
     c1, c2, c3, c4, c5, c6 = st.columns(6)
 
     with st.spinner("Loading market quotes..."):
-        indices_quotes = get_quotes(
-            [
-                "^NSEI",
-                "^BSESN",
-                "^NSEBANK",
-                "NIFTY_FIN_SERVICE.NS",
-                "USDINR=X",
-                "BTC-USD",
-            ]
-        )
+        snap = get_quotes(["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS"])
 
     with c1:
-        n = indices_quotes.get("^NSEI", {})
-        price = n.get("price", 0)
-        change = n.get("change_pct", 0)
-        st.metric("NIFTY 50", f"{float(price):,.2f}", f"{float(change):+.2f}%")
+        q = snap.get("RELIANCE.NS", {})
+        st.metric("RELIANCE", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
     with c2:
-        b = indices_quotes.get("^BSESN", {})
-        price = b.get("price", 0)
-        change = b.get("change_pct", 0)
-        st.metric("SENSEX", f"{float(price):,.2f}", f"{float(change):+.2f}%")
+        q = snap.get("TCS.NS", {})
+        st.metric("TCS", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
     with c3:
-        nb = indices_quotes.get("^NSEBANK", {})
-        price = nb.get("price", 0)
-        change = nb.get("change_pct", 0)
-        st.metric("BANK NIFTY", f"{float(price):,.2f}", f"{float(change):+.2f}%")
+        q = snap.get("HDFCBANK.NS", {})
+        st.metric("HDFCBANK", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
     with c4:
-        fn = indices_quotes.get("NIFTY_FIN_SERVICE.NS", {})
-        price = fn.get("price", 0)
-        change = fn.get("change_pct", 0)
-        st.metric("FINNIFTY", f"{float(price):,.2f}", f"{float(change):+.2f}%")
+        q = snap.get("ICICIBANK.NS", {})
+        st.metric("ICICIBANK", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
     with c5:
-        d = indices_quotes.get("USDINR=X", {})
-        price = d.get("price", 0)
-        change = d.get("change_pct", 0)
-        st.metric("USD/INR", f"₹{float(price):,.2f}", f"{float(change):+.2f}%")
+        q = snap.get("INFY.NS", {})
+        st.metric("INFY", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
     with c6:
-        bt = indices_quotes.get("BTC-USD", {})
-        price = bt.get("price", 0)
-        change = bt.get("change_pct", 0)
-        st.metric("Bitcoin", f"${float(price):,.2f}", f"{float(change):+.2f}%")
+        q = snap.get("ITC.NS", {})
+        st.metric("ITC", f"₹{q.get('price', 0):,.2f}" if q.get("source") != "None" else "—", f"{q.get('change_pct', 0):+.2f}%" if q.get("source") != "None" else "—")
 
     st.markdown("---")
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -87,3 +88,27 @@ def sync_eod(prefix: str = "eod/nifty50") -> Dict[str, Any]:
             _download(latest, root / "models" / model_id / "LATEST")
 
     return meta
+
+
+def _safe_symbol(sym: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", sym.upper())
+
+
+def sync_ohlcv(sym: str, prefix: str = "eod/nifty50") -> bool:
+    """Fetch a single symbol OHLCV parquet into local `data/ohlcv/`.
+
+    Returns True if a local file exists after the call.
+    """
+    bucket = os.getenv("SUPABASE_BUCKET", "").strip()
+    if not bucket:
+        return False
+
+    root = data_dir()
+    out = root / "ohlcv" / f"{_safe_symbol(sym)}.parquet"
+    if out.exists():
+        return True
+
+    url = _supabase_public_url(bucket, f"{prefix.rstrip('/')}/ohlcv/{out.name}")
+    if not url:
+        return False
+    return _download(url, out)

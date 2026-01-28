@@ -11,6 +11,7 @@ import streamlit as st
 import yfinance as yf
 from dotenv import load_dotenv
 
+from services.remote_artifacts import sync_ohlcv
 from services.store import has_ohlcv, read_ohlcv_period
 
 load_dotenv()
@@ -168,6 +169,7 @@ def _indianapi_price(sym: str) -> Optional[float]:
 @st.cache_data(ttl=CACHE_QUOTE_S)
 def get_quote(sym: str) -> Dict:
     sym = normalize_symbol(sym)
+    sync_ohlcv(sym)
 
     h = read_ohlcv_period(sym, "5d") if has_ohlcv(sym) else pd.DataFrame()
     if h.empty:
@@ -212,6 +214,7 @@ def get_quotes(syms: List[str]) -> Dict[str, Dict]:
 @st.cache_data(ttl=CACHE_HISTORY_S)
 def get_historical(sym: str, period: str = "1mo") -> pd.DataFrame:
     sym = normalize_symbol(sym)
+    sync_ohlcv(sym)
     h = read_ohlcv_period(sym, period) if has_ohlcv(sym) else pd.DataFrame()
     if h.empty:
         h = _yahoo_history(sym, period)

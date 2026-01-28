@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -187,12 +188,48 @@ def _parquet_write(df: pd.DataFrame, out_path: Path) -> None:
     con.close()
 
 
+def _safe_symbol(sym: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", sym.upper())
+
+
+def _ohlcv_path(sym: str) -> Path:
+    return data_root() / "ohlcv" / f"{_safe_symbol(sym)}.parquet"
+
+
+def _write_ohlcv(sym: str, h: pd.DataFrame) -> None:
+    if h is None or h.empty:
+        return
+    if "Close" not in h:
+        return
+    out = _ohlcv_path(sym)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    df = h.copy()
+    df.index = pd.to_datetime(df.index)
+    df = df.reset_index().rename(columns={"index": "Date"})
+    if "Date" not in df.columns:
+        return
+    for c in ["Open", "High", "Low", "Close"]:
+        if c not in df.columns:
+            return
+    if "Volume" not in df.columns:
+        df["Volume"] = 0
+    df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
+
+    con = duckdb.connect(database=":memory:")
+    con.register("df", df)
+    path = str(out).replace("'", "''")
+    con.execute(f"COPY df TO '{path}' (FORMAT PARQUET)")
+    con.close()
+
+
 def _build_feature_table(universe: Iterable[str], provider: Provider, *, horizon: int, days: int) -> pd.DataFrame:
     rows: list[pd.DataFrame] = []
     for sym in universe:
         h = provider.history(sym, days=days)
         if h.empty:
             continue
+        _write_ohlcv(sym, h)
         f = build_features(h)
         if f.empty:
             continue
@@ -339,6 +376,12 @@ def main() -> int:
     sb.upload_bytes(f"{prefix}/models/{model_id}/{v}/model.npz", (model_dir / "model.npz").read_bytes(), content_type="application/octet-stream")
     sb.upload_bytes(f"{prefix}/models/{model_id}/{v}/meta.json", (model_dir / "meta.json").read_bytes(), content_type="application/json")
     sb.upload_bytes(f"{prefix}/models/{model_id}/LATEST", (root / "models" / model_id / "LATEST").read_bytes(), content_type="text/plain")
+
+    # Upload per-symbol OHLCV snapshots (used by Streamlit Cloud to avoid yfinance at runtime).
+    for sym in universe:
+        p = _ohlcv_path(sym)
+        if p.exists():
+            sb.upload_bytes(f"{prefix}/ohlcv/{p.name}", p.read_bytes(), content_type="application/octet-stream")
 
     # Publish latest.json last (\"last good snapshot\" rule).
     sb.upload_bytes(f"{prefix}/latest.json", json.dumps(latest, indent=2).encode("utf-8"), content_type="application/json")

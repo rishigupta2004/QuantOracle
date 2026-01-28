@@ -233,27 +233,27 @@ def main():
         st.subheader("Market Overview")
 
         c1, c2, c3, c4 = st.columns(4)
-        indices = get_quotes(["^NSEI", "^BSESN", "^NSEBANK", "NIFTY_FIN_SERVICE.NS"])
+        snap = get_quotes(["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS"])
 
         c1.metric(
-            "NIFTY 50",
-            f"₹{indices.get('^NSEI', {}).get('price', 0):,.2f}",
-            f"{indices.get('^NSEI', {}).get('change_pct', 0):+.2f}%",
+            "RELIANCE",
+            f"₹{snap.get('RELIANCE.NS', {}).get('price', 0):,.2f}" if snap.get("RELIANCE.NS", {}).get("source") != "None" else "—",
+            f"{snap.get('RELIANCE.NS', {}).get('change_pct', 0):+.2f}%" if snap.get("RELIANCE.NS", {}).get("source") != "None" else "—",
         )
         c2.metric(
-            "SENSEX",
-            f"₹{indices.get('^BSESN', {}).get('price', 0):,.2f}",
-            f"{indices.get('^BSESN', {}).get('change_pct', 0):+.2f}%",
+            "TCS",
+            f"₹{snap.get('TCS.NS', {}).get('price', 0):,.2f}" if snap.get("TCS.NS", {}).get("source") != "None" else "—",
+            f"{snap.get('TCS.NS', {}).get('change_pct', 0):+.2f}%" if snap.get("TCS.NS", {}).get("source") != "None" else "—",
         )
         c3.metric(
-            "BANK NIFTY",
-            f"₹{indices.get('^NSEBANK', {}).get('price', 0):,.2f}",
-            f"{indices.get('^NSEBANK', {}).get('change_pct', 0):+.2f}%",
+            "HDFCBANK",
+            f"₹{snap.get('HDFCBANK.NS', {}).get('price', 0):,.2f}" if snap.get("HDFCBANK.NS", {}).get("source") != "None" else "—",
+            f"{snap.get('HDFCBANK.NS', {}).get('change_pct', 0):+.2f}%" if snap.get("HDFCBANK.NS", {}).get("source") != "None" else "—",
         )
         c4.metric(
-            "FINNIFTY",
-            f"₹{indices.get('NIFTY_FIN_SERVICE.NS', {}).get('price', 0):,.2f}",
-            f"{indices.get('NIFTY_FIN_SERVICE.NS', {}).get('change_pct', 0):+.2f}%",
+            "ICICIBANK",
+            f"₹{snap.get('ICICIBANK.NS', {}).get('price', 0):,.2f}" if snap.get("ICICIBANK.NS", {}).get("source") != "None" else "—",
+            f"{snap.get('ICICIBANK.NS', {}).get('change_pct', 0):+.2f}%" if snap.get("ICICIBANK.NS", {}).get("source") != "None" else "—",
         )
 
         st.markdown("---")

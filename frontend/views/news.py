@@ -96,7 +96,7 @@ def main():
                             )
                             _render_news_card(article, i)
         else:
-            st.info("No news available at the moment. Check your API keys.")
+            st.info("No news available right now. APIs are optional; RSS can also be blocked/rate-limited on some networks.")
 
     with tab2:
         col_search, col_spacer = st.columns([3, 1])
