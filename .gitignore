@@ -56,3 +56,9 @@ dist/
 frontend/.streamlit/
 frontend/__pycache__/
 frontend/.cache/
+
+
+cv.md
+CONTRACT.md
+STREAMLIT_DEPLOY.md
+MODELS.md
