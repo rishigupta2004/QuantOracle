@@ -206,7 +206,10 @@ def _write_ohlcv(sym: str, h: pd.DataFrame) -> None:
 
     df = h.copy()
     df.index = pd.to_datetime(df.index)
-    df = df.reset_index().rename(columns={"index": "Date"})
+    df = df.reset_index()
+    if "Date" not in df.columns:
+        # Handle non-default index names (e.g., Groww uses "ts").
+        df = df.rename(columns={df.columns[0]: "Date"})
     if "Date" not in df.columns:
         return
     for c in ["Open", "High", "Low", "Close"]:
