@@ -9,6 +9,7 @@
 
 import streamlit as st
 import pandas as pd
+import os
 
 from services.market_data import get_historical
 from utils.analytics import beta, max_drawdown, var
@@ -54,7 +55,13 @@ def main():
                 history[s] = h
 
         if not history:
+            artifacts = bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
             st.error("❌ Insufficient data to calculate risk metrics")
+            if artifacts:
+                st.info(
+                    "India OHLCV is served from the EOD publisher (GitHub Actions → EOD Pipeline). "
+                    "Run it once via workflow_dispatch to seed Supabase, then it refreshes after market close."
+                )
             return
 
         v = var(holdings_to_use, history)

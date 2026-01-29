@@ -19,6 +19,8 @@ load_dotenv()
 
 INDIANAPI_API_KEY = os.getenv("INDIANAPI_API_KEY")
 INDIANAPI_BASE = os.getenv("INDIANAPI_BASE_URL", "https://stock.indianapi.in")
+DISABLE_YFINANCE_INDIA = (os.getenv("QUANTORACLE_DISABLE_YFINANCE_INDIA") or "").strip() == "1"
+ALLOW_YFINANCE_INDIA = (os.getenv("QUANTORACLE_ALLOW_YFINANCE_INDIA") or "").strip() == "1"
 
 CACHE_QUOTE_S = 60
 CACHE_HISTORY_S = 1800
@@ -154,6 +156,27 @@ def _yahoo_history(sym: str, period: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _artifacts_configured() -> bool:
+    return bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
+
+
+def _should_use_yfinance(sym: str) -> bool:
+    if not _is_india_symbol(sym):
+        return True
+    # Allow explicit override for local/dev debugging.
+    if ALLOW_YFINANCE_INDIA:
+        return True
+    # Hosted deployments (HF/Streamlit Cloud) should never hit yfinance for India.
+    if DISABLE_YFINANCE_INDIA:
+        return False
+    # If we have published artifacts, prefer them over yfinance.
+    if _artifacts_configured():
+        return False
+    # Local runs without artifacts fall back to yfinance.
+    return True
+
+
+
 def _indianapi_quote(sym: str) -> Dict[str, float]:
     if not INDIANAPI_API_KEY:
         return {}
@@ -212,9 +235,7 @@ def get_quote(sym: str) -> Dict:
     snap_q = snap.get(sym) if isinstance(snap, dict) else None
 
     h = read_ohlcv_period(sym, "5d") if has_ohlcv(sym) else pd.DataFrame()
-    artifacts = bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
-    allow_yf_india = (os.getenv("QUANTORACLE_ALLOW_YFINANCE_INDIA") or "").strip() == "1" or not artifacts
-    if h.empty and (not _is_india_symbol(sym) or allow_yf_india):
+    if h.empty and _should_use_yfinance(sym):
         h = _yahoo_history(sym, "5d")
 
     # If we have no OHLCV at all, fall back to intraday snapshot / IndianAPI for India symbols.
@@ -298,9 +319,7 @@ def get_historical(sym: str, period: str = "1mo") -> pd.DataFrame:
     sym = normalize_symbol(sym)
     sync_ohlcv(sym)
     h = read_ohlcv_period(sym, period) if has_ohlcv(sym) else pd.DataFrame()
-    artifacts = bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
-    allow_yf_india = (os.getenv("QUANTORACLE_ALLOW_YFINANCE_INDIA") or "").strip() == "1" or not artifacts
-    if h.empty and (not _is_india_symbol(sym) or allow_yf_india):
+    if h.empty and _should_use_yfinance(sym):
         h = _yahoo_history(sym, period)
     if not h.empty:
         return h

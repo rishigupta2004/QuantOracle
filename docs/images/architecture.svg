@@ -17,8 +17,8 @@
   </defs>
 
   <rect class="bg" x="0" y="0" width="1200" height="420"/>
-  <text class="title" x="40" y="50">QuantOracle — EOD Publisher → Streamlit UI</text>
-  <text class="muted" x="40" y="74">Published artifacts keep the UI fast and deterministic (no training in Streamlit).</text>
+  <text class="title" x="40" y="50">QuantOracle — EOD Publisher → Hugging Face Spaces UI</text>
+  <text class="muted" x="40" y="74">Published artifacts keep the UI fast and deterministic (no training in the UI).</text>
 
   <!-- Publisher -->
   <rect class="card" x="40" y="110" width="420" height="250" rx="16"/>
@@ -43,7 +43,7 @@
 
   <!-- UI -->
   <rect class="card" x="840" y="110" width="320" height="250" rx="16"/>
-  <text class="title" x="870" y="150">UI (Streamlit Cloud)</text>
+  <text class="title" x="870" y="150">UI (Hugging Face Spaces)</text>
   <rect class="pill" x="870" y="170" width="170" height="26" rx="13"/>
   <text class="pillTxt" x="885" y="188">No training in UI</text>
 
@@ -58,4 +58,3 @@
   <path class="arrow" d="M 460 235 C 500 235, 480 235, 500 235"/>
   <path class="arrow" d="M 800 235 C 840 235, 820 235, 840 235"/>
 </svg>
-

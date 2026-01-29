@@ -3,8 +3,10 @@ name: Intraday Quotes
 on:
   workflow_dispatch:
   schedule:
-    # Every 10 minutes (UTC 03:00-10:59) on weekdays; script self-gates to NSE hours (IST).
-    - cron: "*/10 3-10 * * 1-5"
+    # Every 15 minutes during NSE hours (IST 09:15-15:30 => UTC 03:45-10:00), weekdays.
+    - cron: "45-59/15 3 * * 1-5"  # 03:45
+    - cron: "*/15 4-9 * * 1-5"    # 04:00..09:45
+    - cron: "0 10 * * 1-5"        # 10:00 (15:30 IST close)
     # One extra run at 10:15 UTC (~15:45 IST) to guarantee a post-close publish.
     - cron: "15 10 * * 1-5"
 

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import streamlit as st
@@ -67,7 +68,15 @@ def _chart(sym: str, tf: str, *, key: str):
         h = get_historical(normalized, period)
 
     if h.empty:
-        st.error(f"""
+        artifacts = bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
+        if artifacts and normalized.endswith((".NS", ".BO")):
+            st.error(f"❌ No published historical data for {normalized} yet.")
+            st.info(
+                "India OHLCV is served from the EOD publisher (GitHub Actions → EOD Pipeline). "
+                "Run it once via workflow_dispatch to seed Supabase, then it refreshes after market close."
+            )
+        else:
+            st.error(f"""
 ❌ No data available for {sym}
 
 This symbol may be delisted, too new, or not tracked by our data sources.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Publish an intraday quotes snapshot to Supabase Storage.
 
-This workflow is meant to run frequently (e.g. every 10 minutes during market hours)
+This workflow is meant to run frequently (e.g. every 15 minutes during market hours)
 to keep dashboard tiles fresh on hosted deployments where yfinance can be flaky.
 
 Output (local):
@@ -196,4 +196,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

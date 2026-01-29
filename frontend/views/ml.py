@@ -123,7 +123,15 @@ def main():
 
         h = get_historical(sym, "1y")
         if h.empty:
-            st.error(f"No historical data for {sym}")
+            artifacts = bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
+            if artifacts and sym.endswith((".NS", ".BO")):
+                st.error(f"❌ No published historical data for {sym} yet.")
+                st.info(
+                    "India OHLCV is served from the EOD publisher (GitHub Actions → EOD Pipeline). "
+                    "Run it once via workflow_dispatch to seed Supabase, then it refreshes after market close."
+                )
+            else:
+                st.error(f"No historical data for {sym}")
             return
 
         ind = indicators(h)

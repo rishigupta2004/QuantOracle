@@ -1,8 +1,8 @@
 ---
 title: QuantOracle
-emoji: 📈
-colorFrom: indigo
-colorTo: pink
+emoji: "📈"
+colorFrom: "indigo"
+colorTo: "pink"
 sdk: docker
 app_port: 7860
 pinned: false

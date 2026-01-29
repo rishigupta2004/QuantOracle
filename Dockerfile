@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV QUANTORACLE_DATA_DIR=/tmp/quantoracle-data
 ENV QUANTORACLE_EOD_PREFIX=eod/nifty50
+ENV QUANTORACLE_DISABLE_YFINANCE_INDIA=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
