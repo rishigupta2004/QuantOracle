@@ -3,8 +3,10 @@ name: Intraday Quotes
 on:
   workflow_dispatch:
   schedule:
-    # Every 10 minutes on weekdays. Script self-gates to NSE hours (IST).
-    - cron: "*/10 * * * 1-5"
+    # Every 10 minutes (UTC 03:00-10:59) on weekdays; script self-gates to NSE hours (IST).
+    - cron: "*/10 3-10 * * 1-5"
+    # One extra run at 10:15 UTC (~15:45 IST) to guarantee a post-close publish.
+    - cron: "15 10 * * 1-5"
 
 concurrency:
   group: intraday-quotes
@@ -37,4 +39,3 @@ jobs:
           GROWW_API_SECRET: ${{ secrets.GROWW_API_SECRET }}
         run: |
           python scripts/publish_quotes.py --universe-file data/universe/india_core.txt --prefix eod/nifty50 --provider groww --upload
-
