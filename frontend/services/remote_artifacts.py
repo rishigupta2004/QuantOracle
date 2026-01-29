@@ -16,6 +16,8 @@ import requests
 
 from services.store import data_dir
 
+DEFAULT_EOD_PREFIX = os.getenv("QUANTORACLE_EOD_PREFIX", "eod/nifty50").strip().strip("/")
+
 
 def _supabase_public_url(bucket: str, path: str) -> Optional[str]:
     base = (os.getenv("SUPABASE_URL") or "").rstrip("/")
@@ -55,6 +57,7 @@ def _download(url: str, out: Path) -> bool:
 
 def sync_eod(prefix: str = "eod/nifty50") -> Dict[str, Any]:
     """Fetch latest published artifacts into local `data/`. Returns latest.json content (may be empty)."""
+    prefix = (prefix or DEFAULT_EOD_PREFIX).strip().strip("/") or DEFAULT_EOD_PREFIX
     meta = fetch_latest_json(prefix)
     if not meta:
         return {}
@@ -99,6 +102,7 @@ def sync_ohlcv(sym: str, prefix: str = "eod/nifty50") -> bool:
 
     Returns True if a local file exists after the call.
     """
+    prefix = (prefix or DEFAULT_EOD_PREFIX).strip().strip("/") or DEFAULT_EOD_PREFIX
     bucket = os.getenv("SUPABASE_BUCKET", "").strip()
     if not bucket:
         return False

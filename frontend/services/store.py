@@ -19,7 +19,29 @@ except Exception:  # pragma: no cover
 
 
 def data_dir() -> Path:
-    return Path(os.getenv("QUANTORACLE_DATA_DIR", "data")).resolve()
+    env = (os.getenv("QUANTORACLE_DATA_DIR") or "").strip()
+    if env:
+        p = Path(env).expanduser().resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    candidates = []
+    candidates.append(Path("data").resolve())
+    if Path("/data").exists():
+        candidates.append(Path("/data") / "quantoracle")
+    candidates.append(Path("/tmp") / "quantoracle")
+
+    for p in candidates:
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            t = p / ".write_test"
+            t.write_text("ok", encoding="utf-8")
+            t.unlink(missing_ok=True)
+            return p
+        except Exception:
+            continue
+
+    return Path("data").resolve()
 
 
 def _safe_symbol(sym: str) -> str:

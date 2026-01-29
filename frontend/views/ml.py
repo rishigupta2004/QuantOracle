@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 import numpy as np
@@ -189,7 +190,7 @@ def main():
 
     with tab_rank:
         # Pull latest published snapshot from Supabase (public bucket) if configured.
-        latest = sync_eod("eod/nifty50")
+        latest = sync_eod(os.getenv("QUANTORACLE_EOD_PREFIX", "eod/nifty50"))
         if latest:
             as_of = latest.get("as_of_date") or ""
             st.caption(f"As of: {as_of} IST | Universe: NIFTY 50 ({latest.get('universe_size', 50)})")
