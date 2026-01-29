@@ -1,3 +1,13 @@
+---
+title: QuantOracle
+emoji: 📈
+colorFrom: indigo
+colorTo: pink
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # QuantOracle
 
 India-first quant research + portfolio intelligence app (Streamlit) with an EOD market screener pipeline.
