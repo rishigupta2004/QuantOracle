@@ -14,12 +14,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 INDIANAPI = os.getenv("INDIANAPI_API_KEY", "")
+INDIANAPI_BASE = os.getenv("INDIANAPI_BASE_URL", "https://stock.indianapi.in").rstrip("/")
 NEWSDATA = os.getenv("NEWSDATA_API_KEY", "")
 
 RSS = [
     ("https://economictimes.indiatimes.com/rssfeedfeeds/-2128934735.crs", "Economic Times"),
     ("https://www.moneycontrol.com/rss/MarketIndia.xml", "MoneyControl"),
     ("https://www.livemint.com/rssTopic/LatestNews", "LiveMint"),
+    # Google News RSS is often the most reliable fallback on hosted networks.
+    ("https://news.google.com/rss/search?q=NSE%20stocks%20when%3A7d&hl=en-IN&gl=IN&ceid=IN:en", "Google News"),
 ]
 
 
@@ -56,17 +59,24 @@ def _newsdata(q: str = "", category: str = "business", country: str = "in") -> L
     if not NEWSDATA:
         return []
     try:
-        params = {"apikey": NEWSDATA}
+        params = {"apikey": NEWSDATA, "language": "en"}
         if q:
             params["q"] = q
         else:
             params.update({"category": category, "country": country})
 
-        r = requests.get("https://newsdata.io/api/1/news", params=params, timeout=6)
-        if r.status_code != 200:
-            return []
-        out = []
-        for n in (r.json() or {}).get("results", [])[:20]:
+        def _fetch(endpoint: str) -> List[Dict]:
+            r = requests.get(endpoint, params=params, timeout=8)
+            if r.status_code != 200:
+                # Keep logs minimal; helps debug HF networking without leaking secrets.
+                print(f"NewsData -> {r.status_code}: {(r.text or '')[:120]}")
+                return []
+            return (r.json() or {}).get("results", [])[:20]
+
+        # NewsData has multiple endpoints; /latest tends to be more stable for headline feeds.
+        items = _fetch("https://newsdata.io/api/1/latest") or _fetch("https://newsdata.io/api/1/news")
+        out: List[Dict] = []
+        for n in items:
             out.append(
                 {
                     "headline": n.get("title", "No Title"),
@@ -85,7 +95,7 @@ def _indianapi_news() -> List[Dict]:
     if not INDIANAPI:
         return []
     try:
-        r = requests.get("https://stock.indianapi.in/news", headers={"x-api-key": INDIANAPI}, timeout=6)
+        r = requests.get(f"{INDIANAPI_BASE}/news", headers={"x-api-key": INDIANAPI}, timeout=8)
         if r.status_code != 200:
             return []
         data = r.json()
@@ -154,4 +164,3 @@ def categorize_news(articles: List[Dict]) -> Dict[str, List[Dict]]:
 
 def status() -> Dict:
     return {"indianapi": bool(INDIANAPI), "newsdata": bool(NEWSDATA)}
-
