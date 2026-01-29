@@ -124,14 +124,14 @@ Diagram: `docs/images/architecture.svg`
 
 Screenshots from the running app:
 
-![Dashboard](docs/images/screenshots/dashboard.png)
-![Markets Overview](docs/images/screenshots/markets_overview.png)
-![Markets Chart](docs/images/screenshots/markets_chart.png)
-![Risk](docs/images/screenshots/risk.png)
-![ML (Single Stock)](docs/images/screenshots/ml_single_stock.png)
-![ML (Screener)](docs/images/screenshots/ml_screener.png)
-![News](docs/images/screenshots/news.png)
-![Updates](docs/images/screenshots/updates.png)
+![Dashboard](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/dashboard.png)
+![Markets Overview](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/markets_overview.png)
+![Markets Chart](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/markets_chart.png)
+![Risk](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/risk.png)
+![ML (Single Stock)](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/ml_single_stock.png)
+![ML (Screener)](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/ml_screener.png)
+![News](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/news.png)
+![Updates](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/updates.png)
 
 ## Installation
 
