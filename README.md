@@ -2,7 +2,7 @@
 
 India-first quant research + portfolio intelligence app (Streamlit) with an EOD market screener pipeline.
 
-[Live app (Streamlit Cloud)](https://quantoracle-7udw2wxfmnspu4swpjlykc.streamlit.app) 
+[Live app (Hugging Face Spaces)](https://huggingface.co/spaces/thinkingEverytime/QuantOracle) (cold start can take a couple minutes)
 
 [![CI](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml)
 [![EOD Pipeline](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml)
@@ -56,10 +56,10 @@ These example visuals show the kind of outputs QuantOracle produces (not a claim
 
 ## Architecture (EOD Pipeline)
 
-Streamlit Cloud storage is ephemeral, so QuantOracle uses a published-artifacts workflow:
+Hugging Face Spaces storage is ephemeral, so QuantOracle uses a published-artifacts workflow:
 
 - **Publisher (GitHub Actions, after close)**: fetches EOD candles (Groww), builds a feature snapshot, trains a ridge model, uploads artifacts
-- **UI (Streamlit Cloud)**: downloads `latest.json` + `features.parquet` + model files and renders instantly (no training in the UI)
+- **UI (Hugging Face Spaces)**: downloads `latest.json` + `features.parquet` + model files and renders instantly (no training in the UI)
 
 ![Architecture diagram](docs/images/architecture.svg)
 
@@ -70,7 +70,7 @@ frontend/          Streamlit app (pages, theme, services)
 quant/             Core analytics + features + model helpers
 scripts/           Publisher + diagnostics
 tests/             pytest suite
-streamlit_app.py   Streamlit Cloud entrypoint (repo root)
+streamlit_app.py   Hugging Face Spaces entrypoint (repo root)
 data/universe/     Universe lists (tracked)
 ```
 
