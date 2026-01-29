@@ -116,3 +116,18 @@ def sync_ohlcv(sym: str, prefix: str = "eod/nifty50") -> bool:
     if not url:
         return False
     return _download(url, out)
+
+
+def sync_quotes(prefix: str = "eod/nifty50") -> bool:
+    """Fetch latest published intraday quotes snapshot into local `data/quotes.json`."""
+    prefix = (prefix or DEFAULT_EOD_PREFIX).strip().strip("/") or DEFAULT_EOD_PREFIX
+    bucket = os.getenv("SUPABASE_BUCKET", "").strip()
+    if not bucket:
+        return False
+
+    root = data_dir()
+    out = root / "quotes.json"
+    url = _supabase_public_url(bucket, f"{prefix.rstrip('/')}/quotes.json")
+    if not url:
+        return False
+    return _download(url, out)

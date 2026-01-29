@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import pandas as pd
 import requests
@@ -153,11 +154,11 @@ def _yahoo_history(sym: str, period: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _indianapi_price(sym: str) -> Optional[float]:
+def _indianapi_quote(sym: str) -> Dict[str, float]:
     if not INDIANAPI_API_KEY:
-        return None
-    if sym.startswith("^") or "NIFTY" in sym:
-        return None
+        return {}
+    if sym.startswith("^"):
+        return {}
     try:
         name = sym.replace(".NS", "").replace(".BO", "")
         r = requests.get(
@@ -167,12 +168,39 @@ def _indianapi_price(sym: str) -> Optional[float]:
             timeout=5,
         )
         if r.status_code != 200:
-            return None
+            return {}
         d = r.json() or {}
         cp = (d.get("currentPrice") or {}).get("NSE") or (d.get("currentPrice") or {}).get("BSE")
-        return float(cp) if cp else None
+        pct = d.get("percentChange") or d.get("pChange") or d.get("changePercent") or 0
+        out: Dict[str, float] = {}
+        if cp:
+            out["price"] = float(cp)
+        try:
+            out["change_pct"] = float(pct)
+        except Exception:
+            out["change_pct"] = 0.0
+        return out
     except Exception:
-        return None
+        return {}
+
+
+@st.cache_data(ttl=30)
+def _quotes_snapshot() -> Dict[str, Dict]:
+    """Best-effort intraday quote snapshot published by the GitHub workflow."""
+    try:
+        from services.remote_artifacts import sync_quotes
+        from services.store import data_dir
+
+        sync_quotes()
+        p = data_dir() / "quotes.json"
+        if not p.exists():
+            return {}
+        raw = json.loads(p.read_text(encoding="utf-8")) or {}
+        if isinstance(raw, dict) and isinstance(raw.get("quotes"), dict):
+            return raw.get("quotes") or {}
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
 
 
 @st.cache_data(ttl=CACHE_QUOTE_S)
@@ -180,10 +208,51 @@ def get_quote(sym: str) -> Dict:
     sym = normalize_symbol(sym)
     sync_ohlcv(sym)
 
+    snap = _quotes_snapshot()
+    snap_q = snap.get(sym) if isinstance(snap, dict) else None
+
     h = read_ohlcv_period(sym, "5d") if has_ohlcv(sym) else pd.DataFrame()
-    if h.empty:
+    artifacts = bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
+    allow_yf_india = (os.getenv("QUANTORACLE_ALLOW_YFINANCE_INDIA") or "").strip() == "1" or not artifacts
+    if h.empty and (not _is_india_symbol(sym) or allow_yf_india):
         h = _yahoo_history(sym, "5d")
+
+    # If we have no OHLCV at all, fall back to intraday snapshot / IndianAPI for India symbols.
     if h.empty or "Close" not in h:
+        if _is_india_symbol(sym):
+            if isinstance(snap_q, dict) and float(snap_q.get("price", 0) or 0) > 0:
+                price = float(snap_q.get("price"))
+                change_pct = float(snap_q.get("change_pct", 0) or 0)
+                change = float(price * change_pct / 100) if change_pct else 0.0
+                return {
+                    "symbol": sym,
+                    "price": price,
+                    "change": change,
+                    "change_pct": change_pct,
+                    "open": 0.0,
+                    "high": 0.0,
+                    "low": 0.0,
+                    "volume": int(snap_q.get("volume", 0) or 0),
+                    "source": "SupabaseQuotes",
+                }
+
+            iq = _indianapi_quote(sym)
+            if iq.get("price"):
+                price = float(iq["price"])
+                change_pct = float(iq.get("change_pct", 0) or 0)
+                change = float(price * change_pct / 100) if change_pct else 0.0
+                return {
+                    "symbol": sym,
+                    "price": price,
+                    "change": change,
+                    "change_pct": change_pct,
+                    "open": 0.0,
+                    "high": 0.0,
+                    "low": 0.0,
+                    "volume": 0,
+                    "source": "IndianAPI",
+                }
+
         return {"symbol": sym, "price": 0.0, "change": 0.0, "change_pct": 0.0, "open": 0.0, "high": 0.0, "low": 0.0, "volume": 0, "source": "None"}
 
     last_close = float(h["Close"].iloc[-1])
@@ -192,12 +261,16 @@ def get_quote(sym: str) -> Dict:
     price = last_close
     source = "yahoo"
 
-    # If IndianAPI is configured, use it only to override the current price for India symbols.
+    # Prefer intraday snapshot (if published), otherwise IndianAPI for India symbols.
     if _is_india_symbol(sym):
-        ip = _indianapi_price(sym)
-        if ip:
-            price = float(ip)
-            source = "IndianAPI"
+        if isinstance(snap_q, dict) and float(snap_q.get("price", 0) or 0) > 0:
+            price = float(snap_q.get("price"))
+            source = "SupabaseQuotes"
+        else:
+            iq = _indianapi_quote(sym)
+            if iq.get("price"):
+                price = float(iq["price"])
+                source = "IndianAPI"
 
     change = float(price - prev_close) if prev_close else 0.0
     change_pct = float(change / prev_close * 100) if prev_close else 0.0
@@ -225,7 +298,9 @@ def get_historical(sym: str, period: str = "1mo") -> pd.DataFrame:
     sym = normalize_symbol(sym)
     sync_ohlcv(sym)
     h = read_ohlcv_period(sym, period) if has_ohlcv(sym) else pd.DataFrame()
-    if h.empty:
+    artifacts = bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
+    allow_yf_india = (os.getenv("QUANTORACLE_ALLOW_YFINANCE_INDIA") or "").strip() == "1" or not artifacts
+    if h.empty and (not _is_india_symbol(sym) or allow_yf_india):
         h = _yahoo_history(sym, period)
     if not h.empty:
         return h
