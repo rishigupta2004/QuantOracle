@@ -10,7 +10,7 @@ pinned: false
 
 # QuantOracle
 
-QuantOracle is an India-first quantitative research and portfolio intelligence platform built with Streamlit.
+QuantOracle is a quantitative research and portfolio intelligence platform built with Streamlit.
 It combines data ingestion, feature engineering, model training, and an interactive web interface to help investors explore markets, construct portfolios, and analyze risk.
 
 It uses a reproducible end-of-day (EOD) pipeline to automatically build feature snapshots and publish model artifacts so the UI loads quickly and deterministically.
