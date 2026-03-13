@@ -462,18 +462,35 @@ def main() -> int:
     if args.provider in ("auto", "upstox") and not (upstox_token and upstox_map):
         print("Note: UPSTOX_ACCESS_TOKEN/UPSTOX_SYMBOL_MAP not set; skipping Upstox.")
 
+    if not providers:
+        raise SystemExit("No data providers available. Check API keys.")
+
     df = pd.DataFrame()
     used = None
+    errors = []
     for p in providers:
-        df = _build_feature_table(
-            universe, p, horizon=args.horizon, days=args.history_days
-        )
-        if not df.empty:
-            used = p.name
-            break
+        try:
+            df = _build_feature_table(
+                universe, p, horizon=args.horizon, days=args.history_days
+            )
+            if not df.empty:
+                used = p.name
+                print(f"Successfully fetched {len(df)} records using {p.name}")
+                break
+            else:
+                errors.append(f"{p.name} returned empty data")
+        except Exception as e:
+            errors.append(f"{p.name} failed: {e}")
+            print(f"Warning: {p.name} failed: {e}")
 
     if df.empty:
-        raise SystemExit("No features produced (data source unavailable).")
+        error_msg = f"No features produced. Errors: {'; '.join(errors)}"
+        if args.upload:
+            print(f"ERROR: {error_msg}")
+            raise SystemExit(f"Pipeline failed: {error_msg}")
+        else:
+            print(f"Warning: {error_msg} (--upload not set, continuing without upload)")
+            return 0
 
     root = data_root()
     df["Date"] = pd.to_datetime(df["Date"])

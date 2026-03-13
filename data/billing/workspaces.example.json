@@ -1,0 +1,54 @@
+{
+  "default": {
+    "plan": "starter",
+    "usage": {
+      "api_calls": {
+        "used": 820,
+        "limit": 5000,
+        "unit": "requests"
+      },
+      "quote_requests": {
+        "used": 540,
+        "limit": 4000,
+        "unit": "requests"
+      },
+      "news_requests": {
+        "used": 126,
+        "limit": 1000,
+        "unit": "requests"
+      },
+      "alerts": {
+        "used": 2,
+        "limit": 10,
+        "unit": "count"
+      }
+    },
+    "updated_at": "2026-03-12T00:00:00Z"
+  },
+  "pro-team": {
+    "plan": "pro",
+    "usage": {
+      "api_calls": {
+        "used": 12340,
+        "limit": 50000,
+        "unit": "requests"
+      },
+      "quote_requests": {
+        "used": 8030,
+        "limit": 30000,
+        "unit": "requests"
+      },
+      "news_requests": {
+        "used": 1700,
+        "limit": 8000,
+        "unit": "requests"
+      },
+      "alerts": {
+        "used": 33,
+        "limit": 100,
+        "unit": "count"
+      }
+    },
+    "updated_at": "2026-03-12T00:00:00Z"
+  }
+}

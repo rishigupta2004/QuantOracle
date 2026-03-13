@@ -31,6 +31,9 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+node_modules/
+web/.next/
+web/out/
 
 # QuantOracle generated data (keep `data/universe/*` tracked)
 data/ohlcv/
@@ -39,3 +42,4 @@ data/eod_latest.json
 data/models/
 CV.md 
 CV.md/*
+.vercel

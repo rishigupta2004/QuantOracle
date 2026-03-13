@@ -24,6 +24,7 @@ export type QuotesPayload = {
   diagnostics: {
     runtime_ms: number
     cache_hit: boolean
+    reliability: Record<string, number>
     keys: {
       upstox_access_token: boolean
       upstox_symbol_map: boolean
@@ -80,6 +81,59 @@ const QUOTES_CACHE_TTL_MS = (() => {
   }
   return Math.max(2000, Math.min(60_000, Math.round(raw)))
 })()
+
+type ProviderStats = {
+  attempts: number
+  successes: number
+  lastSuccess: number
+  lastAttempt: number
+}
+
+const RELIABILITY_WINDOW_MS = 15 * 60 * 1000
+const providerStats = new Map<string, ProviderStats>()
+
+function getProviderStats(source: string): ProviderStats {
+  const existing = providerStats.get(source)
+  if (existing) {
+    const now = Date.now()
+    if (now - existing.lastAttempt > RELIABILITY_WINDOW_MS) {
+      const decayFactor = 0.3
+      return {
+        attempts: Math.round(existing.attempts * decayFactor),
+        successes: Math.round(existing.successes * decayFactor),
+        lastSuccess: existing.lastSuccess,
+        lastAttempt: existing.lastAttempt
+      }
+    }
+    return existing
+  }
+  return { attempts: 0, successes: 0, lastSuccess: 0, lastAttempt: 0 }
+}
+
+function recordProviderAttempt(source: string, success: boolean): void {
+  const stats = getProviderStats(source)
+  const now = Date.now()
+  providerStats.set(source, {
+    attempts: stats.attempts + 1,
+    successes: stats.successes + (success ? 1 : 0),
+    lastSuccess: success ? now : stats.lastSuccess,
+    lastAttempt: now
+  })
+}
+
+function providerReliabilityScore(source: string): number {
+  const stats = getProviderStats(source)
+  if (stats.attempts < 3) {
+    return 0.5
+  }
+  const rate = stats.successes / stats.attempts
+  const recencyBonus = stats.lastSuccess > 0 ? Math.min(0.15, (Date.now() - stats.lastSuccess) / (60 * 60 * 1000)) : 0
+  return Math.max(0, Math.min(1, rate + recencyBonus))
+}
+
+function sortedProvidersByReliability(sources: string[]): string[] {
+  return [...sources].sort((a, b) => providerReliabilityScore(b) - providerReliabilityScore(a))
+}
 
 const quotesCache = new Map<string, QuotesCacheEntry>()
 
@@ -586,18 +640,23 @@ async function liveChain(symbol: string, upstoxToken: string, upstoxMap: Record<
   let q = emptyQuote(symbol)
   if (isCryptoSymbol(symbol)) {
     q = accept(await coingeckoQuote(symbol))
+    recordProviderAttempt("coingecko", isValid(q))
   }
   if (!isValid(q) && isIndiaSymbol(symbol)) {
     q = accept(await upstoxQuote(symbol, upstoxToken, upstoxMap))
+    recordProviderAttempt("upstox", isValid(q))
   }
   if (!isValid(q)) {
     q = accept(await finnhubQuote(symbol, finnhubKey))
+    recordProviderAttempt("finnhub", isValid(q))
   }
   if (!isValid(q)) {
     q = accept(await eodhdQuote(symbol, eodhdKey))
+    recordProviderAttempt("eodhd", isValid(q))
   }
   if (!isValid(q)) {
     q = accept(await yahooQuote(symbol))
+    recordProviderAttempt("yahoo", isValid(q))
   }
   return q
 }
@@ -642,7 +701,8 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
   const upstoxMap = parseUpstoxMap()
   const finnhubKey = (process.env.FINNHUB_API_KEY ?? "").trim()
   const eodhdKey = (process.env.EODHD_API_KEY ?? "").trim()
-  const providerOrder = ["supabase_snapshot", "coingecko", "upstox", "finnhub", "eodhd", "yahoo"]
+  const baseProviders = ["supabase_snapshot", "coingecko", "upstox", "finnhub", "eodhd", "yahoo"]
+  const providerOrder = sortedProvidersByReliability(baseProviders)
 
   const snapshot = await fetchSupabaseSnapshot(cleaned)
   const quotes: Record<string, Quote> = {}
@@ -671,6 +731,10 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
 
   const stale = Object.values(quotes).some((q) => q.stale || !q.available)
   const config = getProviderConfigStatus()
+  const reliabilityScores: Record<string, number> = {}
+  for (const src of baseProviders) {
+    reliabilityScores[src] = Math.round(providerReliabilityScore(src) * 100) / 100
+  }
 
   const payload: QuotesPayload = {
     as_of_utc: nowIso(),
@@ -683,6 +747,7 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
       runtime_ms: Date.now() - startedAt,
       cache_hit: false,
       keys: config.keys,
+      reliability: reliabilityScores,
       snapshot: {
         url: snapshot.url,
         ok: snapshot.ok,

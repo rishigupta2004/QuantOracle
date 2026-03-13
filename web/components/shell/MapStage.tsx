@@ -28,9 +28,16 @@ const MARKERS: Marker[] = [
   { symbol: "ETH-USD", lon: 13.405, lat: 52.52 }
 ]
 
-const MAP_STYLE =
-  process.env.NEXT_PUBLIC_MAP_STYLE_URL ||
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+const MAP_STYLE = (() => {
+  const envStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL
+  if (envStyle) return envStyle
+
+  const apiKey = process.env.STADIA_MAPS_API_KEY || ""
+  if (apiKey) {
+    return `https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json?api_key=${apiKey}`
+  }
+  return "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json"
+})()
 
 function pointColor(q: Quote | undefined, active: boolean): string {
   if (active) {

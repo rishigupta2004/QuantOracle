@@ -33,6 +33,21 @@ const EMPTY: CommandDataState = {
   isLoading: true
 }
 
+const MARKET_HOURS_TZ = "Asia/Kolkata"
+
+function isMarketOpenNow(): boolean {
+  const now = new Date()
+  const ist = new Date(now.toLocaleString("en-US", { timeZone: MARKET_HOURS_TZ }))
+  const day = ist.getDay()
+  if (day === 0 || day === 6) {
+    return false
+  }
+  const hour = ist.getHours()
+  const minute = ist.getMinutes()
+  const timeMinutes = hour * 60 + minute
+  return timeMinutes >= 555 && timeMinutes <= 945
+}
+
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
     const r = await fetch(url, { cache: "no-store" })
@@ -50,13 +65,46 @@ function withError(prev: string[], msg: string): string[] {
   return [...base, msg].slice(-6)
 }
 
+function useInterval(callback: () => void, delayMs: number, enabled = true): void {
+  const savedCallback = useRef(callback)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    savedCallback.current = callback
+  }, [callback])
+
+  useEffect(() => {
+    if (!enabled || delayMs <= 0) {
+      return
+    }
+    const tick = () => savedCallback.current()
+    timerRef.current = setInterval(tick, delayMs)
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+      }
+    }
+  }, [delayMs, enabled])
+}
+
 export function useCommandData(workspaceId: string, watchlist: string[]) {
   const [state, setState] = useState<CommandDataState>(EMPTY)
+  const [isTabVisible, setIsTabVisible] = useState(true)
   const inFlight = useRef({
     usage: false,
     quotes: false,
     macroNewsStatus: false
   })
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsTabVisible(!document.hidden)
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+  }, [])
+
+  const isMarketHours = useMemo(() => isMarketOpenNow(), [])
 
   const watchlistParam = useMemo(
     () => encodeURIComponent(watchlist.join(",")),
@@ -134,6 +182,20 @@ export function useCommandData(workspaceId: string, watchlist: string[]) {
     setState((prev) => ({ ...prev, isLoading: false }))
   }, [loadUsage, loadQuotes, loadMacroNewsStatus])
 
+  const quotesInterval = useMemo(() => {
+    if (!isTabVisible) {
+      return 0
+    }
+    return isMarketHours ? 15_000 : 60_000
+  }, [isTabVisible, isMarketHours])
+
+  const macroNewsInterval = useMemo(() => {
+    if (!isTabVisible) {
+      return 0
+    }
+    return isMarketHours ? 60_000 : 180_000
+  }, [isTabVisible, isMarketHours])
+
   useEffect(() => {
     let active = true
     void refreshAll().finally(() => {
@@ -143,26 +205,18 @@ export function useCommandData(workspaceId: string, watchlist: string[]) {
       setState((prev) => ({ ...prev, isLoading: false }))
     })
 
-    const tUsage = setInterval(() => {
-      void loadUsage()
-    }, 60_000)
-    const tQuotes = setInterval(() => {
-      void loadQuotes()
-    }, 20_000)
-    const tMacroNewsStatus = setInterval(() => {
-      void loadMacroNewsStatus()
-    }, 90_000)
-
     return () => {
       active = false
-      clearInterval(tUsage)
-      clearInterval(tQuotes)
-      clearInterval(tMacroNewsStatus)
     }
-  }, [refreshAll, loadUsage, loadQuotes, loadMacroNewsStatus])
+  }, [refreshAll])
+
+  useInterval(loadUsage, 300_000, isTabVisible)
+  useInterval(loadQuotes, quotesInterval, quotesInterval > 0)
+  useInterval(loadMacroNewsStatus, macroNewsInterval, macroNewsInterval > 0)
 
   return {
     ...state,
-    refreshAll
+    refreshAll,
+    isTabVisible
   }
 }

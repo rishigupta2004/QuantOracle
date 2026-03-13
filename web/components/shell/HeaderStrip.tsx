@@ -15,6 +15,7 @@ type Props = {
   slotAvailability: Record<LayoutSlot, boolean>
   slotSavedAt: Record<LayoutSlot, string | null>
   lastSlotAction: string
+  isTabVisible: boolean
   onToggleDensity: () => void
   onCycleLayout: () => void
   onLoadSlot: (slot: LayoutSlot) => void
@@ -74,6 +75,7 @@ export function HeaderStrip({
   slotAvailability,
   slotSavedAt,
   lastSlotAction,
+  isTabVisible,
   onToggleDensity,
   onCycleLayout,
   onLoadSlot,
@@ -115,6 +117,12 @@ export function HeaderStrip({
       </div>
 
       <div className="wm-header-right">
+        <button type="button" className="wm-header-btn wm-header-btn-primary" onClick={onRefresh} title="Refresh all data">
+          ↻
+        </button>
+        <span className={`wm-indicator ${isTabVisible ? "ok" : "dim"}`}>
+          {isTabVisible ? "ACTIVE" : "BG"}
+        </span>
         <span className="wm-mono">Q AGE {quoteAge}</span>
         <span className="wm-mono">Q RT {quoteRuntime ?? "-"}ms</span>
         <span className={`wm-indicator ${quoteCache ? "ok" : "warn"}`}>Q {quoteCache ? "CACHE" : "LIVE"}</span>

@@ -11,3 +11,17 @@ services:
         sync: false
       - key: SUPABASE_BUCKET
         sync: false
+  - type: web
+    name: quantoracle-api
+    env: python
+    autoDeploy: true
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: QUANTORACLE_BILLING_TOKEN
+        sync: false
+      - key: QUANTORACLE_WORKSPACE_PLAN
+        value: starter
+      - key: QUANTORACLE_BILLING_STORE_PATH
+        value: data/billing/workspaces.json

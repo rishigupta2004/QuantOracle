@@ -12,12 +12,23 @@ import plotly.graph_objects as go
 import pytz
 from datetime import datetime
 
-from services.market_data import get_quotes, get_historical
+from services.macro_data import macro_snapshot
+from services.market_data import get_historical, get_quotes
 from utils.news_service import market_news
 
 # SET_PAGE_CONFIG_FIX_REMOVED
 
-POPULAR_STOCKS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "AAPL", "MSFT", "NVDA"]
+POPULAR_STOCKS = [
+    "RELIANCE.NS",
+    "TCS.NS",
+    "HDFCBANK.NS",
+    "ICICIBANK.NS",
+    "INFY.NS",
+    "ITC.NS",
+    "AAPL",
+    "MSFT",
+    "NVDA",
+]
 
 POPULAR_CRYPTO = ["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "XRP-USD"]
 
@@ -99,7 +110,14 @@ def main():
     nse, us, tm = _status()
     st.title("📈 QuantOracle")
 
-    tile_stocks = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS"]
+    tile_stocks = [
+        "RELIANCE.NS",
+        "TCS.NS",
+        "HDFCBANK.NS",
+        "ICICIBANK.NS",
+        "INFY.NS",
+        "ITC.NS",
+    ]
     tile_proxies = list(INDEX_PROXIES.keys())
     tile_syms = tile_proxies + tile_stocks
 
@@ -201,28 +219,39 @@ def main():
                 key=f"dash_chart_{symbol}_{period}_{int(show_sma)}",
             )
 
-            with st.expander("📊 Market Pulse (Demo placeholders)", expanded=False):
+            with st.expander("📊 Macro Pulse (Open FRED data)", expanded=False):
+                macro = macro_snapshot()
+                c1, c2, c3, c4 = st.columns(4)
 
-                c_sector, c_vix, c_fii = st.columns(3)
+                vix = (macro.get("vix") or {}).get("value")
+                with c1:
+                    st.metric(
+                        "VIX (US)", f"{float(vix):.2f}" if vix is not None else "—"
+                    )
+                    st.caption("FRED: VIXCLS")
 
-                with c_sector:
-                    st.markdown("**Sector Performance**")
-                    st.write("• NIFTY IT: +1.2%")
-                    st.write("• NIFTY PHARMA: +0.8%")
-                    st.write("• NIFTY AUTO: +0.5%")
-                    st.write("• NIFTY METAL: -0.3%")
-                    st.write("• NIFTY ENERGY: -0.5%")
+                us10y = (macro.get("us10y") or {}).get("value")
+                with c2:
+                    st.metric(
+                        "US 10Y (%)",
+                        f"{float(us10y):.2f}" if us10y is not None else "—",
+                    )
+                    st.caption("FRED: DGS10")
 
-                with c_vix:
-                    st.markdown("**India VIX**")
-                    st.metric("VIX", "14.25", "-2.1%")
-                    st.caption("Lower VIX = Less uncertainty")
+                fedfunds = (macro.get("fedfunds") or {}).get("value")
+                with c3:
+                    st.metric(
+                        "Fed Funds (%)",
+                        f"{float(fedfunds):.2f}" if fedfunds is not None else "—",
+                    )
+                    st.caption("FRED: FEDFUNDS")
 
-                with c_fii:
-                    st.markdown("**FII/DII Activity (Today)**")
-                    st.write("• FII Sell: ₹2,500 Cr")
-                    st.write("• DII Buy: ₹1,800 Cr")
-                    st.write("• Net: -₹700 Cr")
+                usdinr = (macro.get("usd_inr") or {}).get("value")
+                with c4:
+                    st.metric(
+                        "USD/INR", f"{float(usdinr):.2f}" if usdinr is not None else "—"
+                    )
+                    st.caption("FRED: DEXINUS")
 
         else:
             st.error(f"❌ No data available for {symbol}")

@@ -45,6 +45,7 @@ type Props = {
   errors: string[]
   isLoading: boolean
   refreshAll: () => void
+  isTabVisible: boolean
   leftOpen: boolean
   rightOpen: boolean
   commandOpen: boolean
@@ -143,6 +144,7 @@ export function CommandShell({
   errors,
   isLoading,
   refreshAll,
+  isTabVisible,
   leftOpen,
   rightOpen,
   commandOpen,
@@ -520,40 +522,59 @@ export function CommandShell({
     }
 
     if (panel === "quotes") {
+      const copyQuotes = () => {
+        const text = quoteRows
+          .map((q) => `${q.symbol} ${q.price.toFixed(2)} ${q.change_pct >= 0 ? "+" : ""}${q.change_pct.toFixed(2)}%`)
+          .join("\n")
+        navigator.clipboard.writeText(text)
+      }
       return (
         <article {...common}>
           <div className="wm-panel-head">
             <span>Live Quotes</span>
+            <button type="button" className="wm-panel-action" onClick={copyQuotes} title="Copy to clipboard">
+              📋
+            </button>
             <span className="wm-drag-chip">drag</span>
           </div>
           <div className="wm-table-wrap">
-            <table className="wm-table">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Price</th>
-                  <th>Change</th>
-                  <th>Conf</th>
-                  <th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quoteRows.map((q) => (
-                  <tr key={q.symbol}>
-                    <td>{q.symbol}</td>
-                    <td>{q.available ? fmt(q.price) : "-"}</td>
-                    <td className={q.change_pct >= 0 ? "up" : "down"}>
-                      {q.available ? `${q.change_pct >= 0 ? "+" : ""}${fmt(q.change_pct)}%` : "-"}
-                    </td>
-                    <td>{q.available ? q.confidence : "-"}</td>
-                    <td>
-                      {q.source}
-                      {q.stale ? " (stale)" : ""}
-                    </td>
+            {isLoading && quoteRows.length === 0 ? (
+              <div style={{ padding: "12px" }}>
+                <div className="wm-skeleton wm-skeleton-row wm-skeleton-lg" />
+                <div className="wm-skeleton wm-skeleton-row wm-skeleton-md" />
+                <div className="wm-skeleton wm-skeleton-row wm-skeleton-sm" />
+                <div className="wm-skeleton wm-skeleton-row wm-skeleton-lg" />
+                <div className="wm-skeleton wm-skeleton-row wm-skeleton-md" />
+              </div>
+            ) : (
+              <table className="wm-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Price</th>
+                    <th>Change</th>
+                    <th>Conf</th>
+                    <th>Source</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {quoteRows.map((q) => (
+                    <tr key={q.symbol}>
+                      <td>{q.symbol}</td>
+                      <td>{q.available ? fmt(q.price) : "-"}</td>
+                      <td className={q.change_pct >= 0 ? "up" : "down"}>
+                        {q.available ? `${q.change_pct >= 0 ? "+" : ""}${fmt(q.change_pct)}%` : "-"}
+                      </td>
+                      <td>{q.available ? q.confidence : "-"}</td>
+                      <td>
+                        {q.source}
+                        {q.stale ? " (stale)" : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </article>
       )
@@ -567,32 +588,43 @@ export function CommandShell({
             <span className="wm-drag-chip">drag</span>
           </div>
           <div className="wm-news-list">
-            {news.slice(0, 10).map((item) => (
-              <a
-                key={`${item.url}-${item.datetime}`}
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-                className="wm-news-item"
-              >
-                <div className="wm-news-title">{item.headline}</div>
-                <div className="wm-news-meta">
-                  {item.source} | {item.datetime}
-                </div>
-                <div className="wm-news-flags">
-                  <span className={`wm-news-flag wm-news-flag-tier-${item.source_tier ?? "unknown"}`}>
-                    {tierLabel(item.source_tier)}
-                  </span>
-                  {item.impact ? (
-                    <span className={`wm-news-flag wm-news-flag-risk-${item.impact.risk_level}`}>
-                      {item.impact.risk_level} risk
+            {isLoading && news.length === 0 ? (
+              <>
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="wm-news-item" style={{ opacity: 0.5 }}>
+                    <div className="wm-skeleton wm-skeleton-row wm-skeleton-lg" style={{ marginBottom: "8px" }} />
+                    <div className="wm-skeleton wm-skeleton-row wm-skeleton-sm" />
+                  </div>
+                ))}
+              </>
+            ) : (
+              news.slice(0, 10).map((item) => (
+                <a
+                  key={`${item.url}-${item.datetime}`}
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="wm-news-item"
+                >
+                  <div className="wm-news-title">{item.headline}</div>
+                  <div className="wm-news-meta">
+                    {item.source} | {item.datetime}
+                  </div>
+                  <div className="wm-news-flags">
+                    <span className={`wm-news-flag wm-news-flag-tier-${item.source_tier ?? "unknown"}`}>
+                      {tierLabel(item.source_tier)}
                     </span>
-                  ) : null}
-                  {item.oil_refinery?.relevant ? <span className="wm-news-flag wm-news-flag-oil">oil/refinery</span> : null}
-                </div>
-                {item.impact?.summary ? <div className="wm-news-impact">{item.impact.summary}</div> : null}
-              </a>
-            ))}
+                    {item.impact ? (
+                      <span className={`wm-news-flag wm-news-flag-risk-${item.impact.risk_level}`}>
+                        {item.impact.risk_level} risk
+                      </span>
+                    ) : null}
+                    {item.oil_refinery?.relevant ? <span className="wm-news-flag wm-news-flag-oil">oil/refinery</span> : null}
+                  </div>
+                  {item.impact?.summary ? <div className="wm-news-impact">{item.impact.summary}</div> : null}
+                </a>
+              ))
+            )}
           </div>
         </article>
       )
@@ -661,6 +693,7 @@ export function CommandShell({
         slotAvailability={slotAvailability}
         slotSavedAt={slotSavedAt}
         lastSlotAction={slotNotice}
+        isTabVisible={isTabVisible}
         onToggleDensity={() => setDensity(density === "compact" ? "comfortable" : "compact")}
         onCycleLayout={() => setLayoutPreset(cycleLayoutPreset(layoutPreset))}
         onLoadSlot={handleLoadSlot}

@@ -44,4 +44,14 @@ jobs:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
         run: |
-          python scripts/publish_quotes.py --universe-file data/universe/india_core.txt --prefix eod/nifty50 --provider auto --upload
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            if python scripts/publish_quotes.py --universe-file data/universe/india_core.txt --prefix eod/nifty50 --provider auto --upload; then
+              echo "Intraday quotes succeeded"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "All attempts failed"
+          exit 1

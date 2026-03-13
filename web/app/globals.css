@@ -118,6 +118,32 @@ a {
   color: var(--warn);
 }
 
+.wm-indicator.dim,
+.dim {
+  color: #666;
+}
+
+.wm-skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+  background-size: 200% 100%;
+  animation: wm-skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: 3px;
+}
+
+@keyframes wm-skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.wm-skeleton-row {
+  height: 14px;
+  margin-bottom: 6px;
+}
+
+.wm-skeleton-sm { width: 30%; }
+.wm-skeleton-md { width: 60%; }
+.wm-skeleton-lg { width: 90%; }
+
 .down {
   color: var(--down);
 }
@@ -138,6 +164,18 @@ a {
 .wm-header-btn.strong {
   border-color: #2f6d4f;
   color: #b6f7cf;
+}
+
+.wm-header-btn-primary {
+  background: #1a3a25;
+  border-color: #2e7d4f;
+  color: #81c784;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+
+.wm-header-btn-primary:hover {
+  background: #245a32;
 }
 
 .wm-header-btn:hover {
@@ -454,6 +492,19 @@ a {
   text-transform: uppercase;
 }
 
+.wm-panel-action {
+  background: transparent;
+  border: none;
+  color: #9e9e9e;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.wm-panel-action:hover {
+  color: #ccc;
+}
+
 .wm-drag-chip {
   font-size: 9px;
   color: #8f8f8f;
@@ -726,6 +777,50 @@ a {
   font-size: 11px;
 }
 
+.wm-command-help {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.wm-command-help-title {
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ccc;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+
+.wm-command-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  font-size: 11px;
+}
+
+.wm-command-help-keys {
+  display: flex;
+  gap: 3px;
+}
+
+.wm-command-help-keys kbd {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-size: 10px;
+  font-family: monospace;
+  color: #ccc;
+}
+
+.wm-command-help-action {
+  color: #999;
+}
+
 .wm-modal-overlay {
   position: fixed;
   inset: 0;
@@ -880,4 +975,64 @@ a {
   .wm-map-canvas {
     min-height: 220px;
   }
+}
+
+.wm-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wm-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: monospace;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  animation: wm-toast-slide 0.25s ease-out;
+}
+
+@keyframes wm-toast-slide {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.wm-toast-success {
+  background: rgba(46, 125, 71, 0.9);
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  color: #a5d6a7;
+}
+
+.wm-toast-error {
+  background: rgba(183, 28, 28, 0.9);
+  border: 1px solid rgba(239, 83, 80, 0.5);
+  color: #ffcdd2;
+}
+
+.wm-toast-info {
+  background: rgba(33, 150, 243, 0.85);
+  border: 1px solid rgba(100, 181, 246, 0.5);
+  color: #bbdefb;
+}
+
+.wm-toast-icon {
+  font-weight: 700;
+}
+
+.wm-toast-message {
+  flex: 1;
 }

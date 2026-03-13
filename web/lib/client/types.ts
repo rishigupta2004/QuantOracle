@@ -26,6 +26,7 @@ export type QuotesResponse = {
   diagnostics: {
     runtime_ms: number
     cache_hit: boolean
+    reliability: Record<string, number>
     keys: Record<string, boolean>
     snapshot: {
       ok: boolean

@@ -34,4 +34,14 @@ jobs:
           GROWW_API_SECRET: ${{ secrets.GROWW_API_SECRET }}
           EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
         run: |
-          python scripts/publish_eod.py --universe-file data/universe/nifty50.txt --universe-name nifty50 --horizon 5 --provider auto --upload
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            if python scripts/publish_eod.py --universe-file data/universe/nifty50.txt --universe-name nifty50 --horizon 5 --provider auto --upload; then
+              echo "EOD pipeline succeeded"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "All attempts failed"
+          exit 1

@@ -14,15 +14,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 INDIANAPI = os.getenv("INDIANAPI_API_KEY", "")
-INDIANAPI_BASE = os.getenv("INDIANAPI_BASE_URL", "https://stock.indianapi.in").rstrip("/")
+INDIANAPI_BASE = os.getenv("INDIANAPI_BASE_URL", "https://stock.indianapi.in").rstrip(
+    "/"
+)
 NEWSDATA = os.getenv("NEWSDATA_API_KEY", "")
+GNEWS = os.getenv("GNEWS_API_KEY", "")
+THENEWSAPI = os.getenv("THENEWSAPI_API_KEY", "")
 
 RSS = [
-    ("https://economictimes.indiatimes.com/rssfeedfeeds/-2128934735.crs", "Economic Times"),
+    (
+        "https://economictimes.indiatimes.com/rssfeedfeeds/-2128934735.crs",
+        "Economic Times",
+    ),
     ("https://www.moneycontrol.com/rss/MarketIndia.xml", "MoneyControl"),
     ("https://www.livemint.com/rssTopic/LatestNews", "LiveMint"),
     # Google News RSS is often the most reliable fallback on hosted networks.
-    ("https://news.google.com/rss/search?q=NSE%20stocks%20when%3A7d&hl=en-IN&gl=IN&ceid=IN:en", "Google News"),
+    (
+        "https://news.google.com/rss/search?q=NSE%20stocks%20when%3A7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "Google News",
+    ),
 ]
 
 
@@ -55,7 +65,9 @@ def _rss(url: str, source: str) -> List[Dict]:
         return []
 
 
-def _newsdata(q: str = "", category: str = "business", country: str = "in") -> List[Dict]:
+def _newsdata(
+    q: str = "", category: str = "business", country: str = "in"
+) -> List[Dict]:
     if not NEWSDATA:
         return []
     try:
@@ -74,7 +86,9 @@ def _newsdata(q: str = "", category: str = "business", country: str = "in") -> L
             return (r.json() or {}).get("results", [])[:20]
 
         # NewsData has multiple endpoints; /latest tends to be more stable for headline feeds.
-        items = _fetch("https://newsdata.io/api/1/latest") or _fetch("https://newsdata.io/api/1/news")
+        items = _fetch("https://newsdata.io/api/1/latest") or _fetch(
+            "https://newsdata.io/api/1/news"
+        )
         out: List[Dict] = []
         for n in items:
             out.append(
@@ -95,7 +109,9 @@ def _indianapi_news() -> List[Dict]:
     if not INDIANAPI:
         return []
     try:
-        r = requests.get(f"{INDIANAPI_BASE}/news", headers={"x-api-key": INDIANAPI}, timeout=8)
+        r = requests.get(
+            f"{INDIANAPI_BASE}/news", headers={"x-api-key": INDIANAPI}, timeout=8
+        )
         if r.status_code != 200:
             return []
         data = r.json()
@@ -115,10 +131,86 @@ def _indianapi_news() -> List[Dict]:
         return []
 
 
+def _gnews(q: str = "", *, country: str = "in") -> List[Dict]:
+    if not GNEWS:
+        return []
+    try:
+        params = {
+            "apikey": GNEWS,
+            "lang": "en",
+            "max": 20,
+        }
+        if q:
+            params["q"] = q
+            url = "https://gnews.io/api/v4/search"
+        else:
+            params["topic"] = "business"
+            params["country"] = country
+            url = "https://gnews.io/api/v4/top-headlines"
+        r = requests.get(url, params=params, timeout=8)
+        if r.status_code != 200:
+            return []
+        items = (r.json() or {}).get("articles", [])[:20]
+        out: List[Dict] = []
+        for n in items:
+            out.append(
+                {
+                    "headline": n.get("title", "No Title"),
+                    "summary": _clean_html(n.get("description", ""))[:300],
+                    "url": n.get("url", "#"),
+                    "source": ((n.get("source") or {}).get("name") or "GNews"),
+                    "datetime": (n.get("publishedAt", "Recent") or "Recent")[:16],
+                }
+            )
+        return out
+    except Exception:
+        return []
+
+
+def _thenewsapi(q: str = "") -> List[Dict]:
+    if not THENEWSAPI:
+        return []
+    try:
+        params = {
+            "api_token": THENEWSAPI,
+            "language": "en",
+            "limit": 20,
+            "categories": "business,finance,tech",
+        }
+        if q:
+            params["search"] = q
+        r = requests.get(
+            "https://api.thenewsapi.com/v1/news/all", params=params, timeout=8
+        )
+        if r.status_code != 200:
+            return []
+        items = (r.json() or {}).get("data", [])[:20]
+        out: List[Dict] = []
+        for n in items:
+            out.append(
+                {
+                    "headline": n.get("title", "No Title"),
+                    "summary": _clean_html(n.get("description", ""))[:300],
+                    "url": n.get("url", "#"),
+                    "source": n.get("source", "TheNewsAPI"),
+                    "datetime": (n.get("published_at", "Recent") or "Recent")[:16],
+                }
+            )
+        return out
+    except Exception:
+        return []
+
+
 @st.cache_data(ttl=900, show_spinner="Loading news...")
 def market_news() -> List[Dict]:
-    # Prefer NewsData (global), then IndianAPI (India), then RSS.
+    # Prefer NewsData (global), then TheNewsAPI/GNews, then IndianAPI, then RSS.
     out = _newsdata()
+    if out:
+        return out
+    out = _thenewsapi()
+    if out:
+        return out
+    out = _gnews()
     if out:
         return out
     out = _indianapi_news()
@@ -133,20 +225,57 @@ def market_news() -> List[Dict]:
 
 @st.cache_data(ttl=600, show_spinner="Searching news...")
 def search_news(keyword: str) -> List[Dict]:
-    return _newsdata(q=keyword) if keyword else []
+    if not keyword:
+        return []
+    return _newsdata(q=keyword) or _thenewsapi(q=keyword) or _gnews(q=keyword)
 
 
 @st.cache_data(ttl=900, show_spinner="Loading company news...")
 def company_news(sym: str) -> List[Dict]:
-    return _newsdata(q=sym) if sym else []
+    if not sym:
+        return []
+    return _newsdata(q=sym) or _thenewsapi(q=sym) or _gnews(q=sym)
 
 
 def categorize_news(articles: List[Dict]) -> Dict[str, List[Dict]]:
-    cats = {"Market News": [], "After Market": [], "US Finance": [], "Tech & Crypto": []}
+    cats = {
+        "Market News": [],
+        "After Market": [],
+        "US Finance": [],
+        "Tech & Crypto": [],
+    }
     kw = {
-        "After Market": ["after hours", "after market", "extended hours", "earnings after", "stock split", "buyback", "dividend"],
-        "US Finance": ["federal reserve", "fed", "us economy", "inflation", "interest rates", "dollar", "wall street", "s&p 500", "nasdaq"],
-        "Tech & Crypto": ["bitcoin", "crypto", "ethereum", "ai", "nvidia", "apple", "microsoft", "google", "meta"],
+        "After Market": [
+            "after hours",
+            "after market",
+            "extended hours",
+            "earnings after",
+            "stock split",
+            "buyback",
+            "dividend",
+        ],
+        "US Finance": [
+            "federal reserve",
+            "fed",
+            "us economy",
+            "inflation",
+            "interest rates",
+            "dollar",
+            "wall street",
+            "s&p 500",
+            "nasdaq",
+        ],
+        "Tech & Crypto": [
+            "bitcoin",
+            "crypto",
+            "ethereum",
+            "ai",
+            "nvidia",
+            "apple",
+            "microsoft",
+            "google",
+            "meta",
+        ],
     }
 
     for a in articles or []:
@@ -163,4 +292,9 @@ def categorize_news(articles: List[Dict]) -> Dict[str, List[Dict]]:
 
 
 def status() -> Dict:
-    return {"indianapi": bool(INDIANAPI), "newsdata": bool(NEWSDATA)}
+    return {
+        "indianapi": bool(INDIANAPI),
+        "newsdata": bool(NEWSDATA),
+        "gnews": bool(GNEWS),
+        "thenewsapi": bool(THENEWSAPI),
+    }

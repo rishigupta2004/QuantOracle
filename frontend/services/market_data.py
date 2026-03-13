@@ -19,8 +19,15 @@ load_dotenv()
 
 INDIANAPI_API_KEY = os.getenv("INDIANAPI_API_KEY")
 INDIANAPI_BASE = os.getenv("INDIANAPI_BASE_URL", "https://stock.indianapi.in")
-DISABLE_YFINANCE_INDIA = (os.getenv("QUANTORACLE_DISABLE_YFINANCE_INDIA") or "").strip() == "1"
-ALLOW_YFINANCE_INDIA = (os.getenv("QUANTORACLE_ALLOW_YFINANCE_INDIA") or "").strip() == "1"
+COINGECKO_BASE = os.getenv(
+    "COINGECKO_BASE_URL", "https://api.coingecko.com/api/v3"
+).rstrip("/")
+DISABLE_YFINANCE_INDIA = (
+    os.getenv("QUANTORACLE_DISABLE_YFINANCE_INDIA") or ""
+).strip() == "1"
+ALLOW_YFINANCE_INDIA = (
+    os.getenv("QUANTORACLE_ALLOW_YFINANCE_INDIA") or ""
+).strip() == "1"
 
 CACHE_QUOTE_S = 60
 CACHE_HISTORY_S = 1800
@@ -34,7 +41,12 @@ INDEX_PROXY = {
 
 
 def _is_india_symbol(sym: str) -> bool:
-    return sym.endswith(".NS") or sym.endswith(".BO") or sym.startswith("^NSE") or sym.startswith("^BSE")
+    return (
+        sym.endswith(".NS")
+        or sym.endswith(".BO")
+        or sym.startswith("^NSE")
+        or sym.startswith("^BSE")
+    )
 
 
 def normalize_symbol(sym: str) -> str:
@@ -157,7 +169,10 @@ def _yahoo_history(sym: str, period: str) -> pd.DataFrame:
 
 
 def _artifacts_configured() -> bool:
-    return bool((os.getenv("SUPABASE_URL") or "").strip() and (os.getenv("SUPABASE_BUCKET") or "").strip())
+    return bool(
+        (os.getenv("SUPABASE_URL") or "").strip()
+        and (os.getenv("SUPABASE_BUCKET") or "").strip()
+    )
 
 
 def _should_use_yfinance(sym: str) -> bool:
@@ -176,7 +191,6 @@ def _should_use_yfinance(sym: str) -> bool:
     return True
 
 
-
 def _indianapi_quote(sym: str) -> Dict[str, float]:
     if not INDIANAPI_API_KEY:
         return {}
@@ -193,7 +207,9 @@ def _indianapi_quote(sym: str) -> Dict[str, float]:
         if r.status_code != 200:
             return {}
         d = r.json() or {}
-        cp = (d.get("currentPrice") or {}).get("NSE") or (d.get("currentPrice") or {}).get("BSE")
+        cp = (d.get("currentPrice") or {}).get("NSE") or (
+            d.get("currentPrice") or {}
+        ).get("BSE")
         pct = d.get("percentChange") or d.get("pChange") or d.get("changePercent") or 0
         out: Dict[str, float] = {}
         if cp:
@@ -203,6 +219,47 @@ def _indianapi_quote(sym: str) -> Dict[str, float]:
         except Exception:
             out["change_pct"] = 0.0
         return out
+    except Exception:
+        return {}
+
+
+def _coingecko_quote(sym: str) -> Dict[str, float]:
+    sym = sym.upper().strip()
+    if not sym.endswith("-USD"):
+        return {}
+
+    coin_map = {
+        "BTC-USD": "bitcoin",
+        "ETH-USD": "ethereum",
+        "SOL-USD": "solana",
+        "DOGE-USD": "dogecoin",
+        "XRP-USD": "ripple",
+    }
+    coin_id = coin_map.get(sym)
+    if not coin_id:
+        return {}
+
+    try:
+        r = requests.get(
+            f"{COINGECKO_BASE}/simple/price",
+            params={
+                "ids": coin_id,
+                "vs_currencies": "usd",
+                "include_24hr_change": "true",
+            },
+            timeout=6,
+        )
+        if r.status_code != 200:
+            return {}
+        data = r.json() or {}
+        d = data.get(coin_id) if isinstance(data, dict) else None
+        if not isinstance(d, dict):
+            return {}
+        price = d.get("usd")
+        if price is None:
+            return {}
+        change_pct = d.get("usd_24h_change") or 0.0
+        return {"price": float(price), "change_pct": float(change_pct)}
     except Exception:
         return {}
 
@@ -274,7 +331,34 @@ def get_quote(sym: str) -> Dict:
                     "source": "IndianAPI",
                 }
 
-        return {"symbol": sym, "price": 0.0, "change": 0.0, "change_pct": 0.0, "open": 0.0, "high": 0.0, "low": 0.0, "volume": 0, "source": "None"}
+        cq = _coingecko_quote(sym)
+        if cq.get("price"):
+            price = float(cq["price"])
+            change_pct = float(cq.get("change_pct", 0) or 0)
+            change = float(price * change_pct / 100) if change_pct else 0.0
+            return {
+                "symbol": sym,
+                "price": price,
+                "change": change,
+                "change_pct": change_pct,
+                "open": 0.0,
+                "high": 0.0,
+                "low": 0.0,
+                "volume": 0,
+                "source": "CoinGecko",
+            }
+
+        return {
+            "symbol": sym,
+            "price": 0.0,
+            "change": 0.0,
+            "change_pct": 0.0,
+            "open": 0.0,
+            "high": 0.0,
+            "low": 0.0,
+            "volume": 0,
+            "source": "None",
+        }
 
     last_close = float(h["Close"].iloc[-1])
     prev_close = float(h["Close"].iloc[-2]) if len(h) >= 2 else last_close
@@ -292,6 +376,11 @@ def get_quote(sym: str) -> Dict:
             if iq.get("price"):
                 price = float(iq["price"])
                 source = "IndianAPI"
+    elif sym.endswith("-USD"):
+        cq = _coingecko_quote(sym)
+        if cq.get("price"):
+            price = float(cq["price"])
+            source = "CoinGecko"
 
     change = float(price - prev_close) if prev_close else 0.0
     change_pct = float(change / prev_close * 100) if prev_close else 0.0
@@ -333,7 +422,9 @@ def indicators(h: pd.DataFrame) -> Dict:
     close = h["Close"].astype(float)
     high = h["High"].astype(float)
     low = h["Low"].astype(float)
-    volume = h["Volume"].astype(float) if "Volume" in h else pd.Series(0.0, index=h.index)
+    volume = (
+        h["Volume"].astype(float) if "Volume" in h else pd.Series(0.0, index=h.index)
+    )
 
     delta = close.diff()
     gain = delta.where(delta > 0, 0.0)
@@ -368,7 +459,9 @@ def indicators(h: pd.DataFrame) -> Dict:
     sma200 = close.rolling(200).mean() if len(close) >= 200 else sma50
 
     vol_sma20 = volume.rolling(20).mean()
-    vol_ratio = float(volume.iloc[-1] / vol_sma20.iloc[-1]) if vol_sma20.iloc[-1] else 0.0
+    vol_ratio = (
+        float(volume.iloc[-1] / vol_sma20.iloc[-1]) if vol_sma20.iloc[-1] else 0.0
+    )
 
     price = float(close.iloc[-1])
     prev = float(close.iloc[-2]) if len(close) >= 2 else price
@@ -391,7 +484,9 @@ def indicators(h: pd.DataFrame) -> Dict:
         "bb_upper": float(bb_upper.iloc[-1]),
         "bb_middle": float(sma20.iloc[-1]),
         "bb_lower": float(bb_lower.iloc[-1]),
-        "bb_position": float((price - bb_lower.iloc[-1]) / (bb_upper.iloc[-1] - bb_lower.iloc[-1]) * 100)
+        "bb_position": float(
+            (price - bb_lower.iloc[-1]) / (bb_upper.iloc[-1] - bb_lower.iloc[-1]) * 100
+        )
         if (bb_upper.iloc[-1] - bb_lower.iloc[-1])
         else 0.0,
         "volume": int(volume.iloc[-1]) if len(volume) else 0,
@@ -467,7 +562,13 @@ def indicators_timeseries(h: pd.DataFrame) -> Dict:
 
 def calculate_signal_score(ind: Dict) -> Dict:
     if not ind:
-        return {"trend": "NEUTRAL", "confidence": 0.0, "score": 0, "signals": [], "max_score": 4}
+        return {
+            "trend": "NEUTRAL",
+            "confidence": 0.0,
+            "score": 0,
+            "signals": [],
+            "max_score": 4,
+        }
 
     score = 0
     signals = []
@@ -514,7 +615,13 @@ def calculate_signal_score(ind: Dict) -> Dict:
         -4: ("STRONG BEARISH", 95),
     }
     trend, conf = trend_map.get(score, ("NEUTRAL", 50))
-    return {"trend": trend, "confidence": float(conf), "score": int(score), "signals": signals, "max_score": 4}
+    return {
+        "trend": trend,
+        "confidence": float(conf),
+        "score": int(score),
+        "signals": signals,
+        "max_score": 4,
+    }
 
 
 def search(q: str) -> List[Dict]:
@@ -523,7 +630,13 @@ def search(q: str) -> List[Dict]:
     q = q.lower()
     items = {**STOCK, **ETF}
     out = [
-        {"symbol": s, "name": n, "exchange": "NSE", "type": "ETF" if s in ETF else "STOCK", "region": "India"}
+        {
+            "symbol": s,
+            "name": n,
+            "exchange": "NSE",
+            "type": "ETF" if s in ETF else "STOCK",
+            "region": "India",
+        }
         for s, n in items.items()
         if q in s.lower() or q in n.lower()
     ]
@@ -543,10 +656,13 @@ def get_trending() -> Dict:
             return {"gainers": [], "losers": []}
         d = r.json() or {}
         ts = d.get("trending_stocks") or {}
-        return {"gainers": (ts.get("top_gainers") or [])[:5], "losers": (ts.get("top_losers") or [])[:5]}
+        return {
+            "gainers": (ts.get("top_gainers") or [])[:5],
+            "losers": (ts.get("top_losers") or [])[:5],
+        }
     except Exception:
         return {"gainers": [], "losers": []}
 
 
 def sources() -> Dict:
-    return {"indianapi": bool(INDIANAPI_API_KEY), "yahoo": True}
+    return {"indianapi": bool(INDIANAPI_API_KEY), "coingecko": True, "yahoo": True}
