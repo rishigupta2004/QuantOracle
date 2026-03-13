@@ -112,5 +112,5 @@ def test_crypto_quote_can_use_coingecko(monkeypatch, stub_yfinance):
 
     q = md.get_quote("BTC-USD")
     assert q["symbol"] == "BTC-USD"
-    assert q["source"] in {"None", "yahoo", "SupabaseQuotes"}
+    assert q["source"] in {"None", "yahoo", "SupabaseQuotes", "CoinGecko"}
     assert isinstance(q["price"], (int, float))
