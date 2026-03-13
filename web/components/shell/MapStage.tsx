@@ -32,7 +32,7 @@ const MAP_STYLE = (() => {
   const envStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL
   if (envStyle) return envStyle
 
-  const apiKey = process.env.STADIA_MAPS_API_KEY || ""
+  const apiKey = process.env.NEXT_PUBLIC_STADIA_MAPS_API_KEY || ""
   if (apiKey) {
     return `https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json?api_key=${apiKey}`
   }
