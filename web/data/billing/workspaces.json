@@ -1,0 +1,12 @@
+{
+  "default": {
+    "plan": "starter",
+    "usage": {
+      "api_calls": {"used": 812, "limit": 5000, "unit": "requests"},
+      "quote_requests": {"used": 597, "limit": 4000, "unit": "requests"},
+      "news_requests": {"used": 224, "limit": 1000, "unit": "requests"},
+      "alerts": {"used": 3, "limit": 10, "unit": "count"}
+    },
+    "updated_at": "2026-03-12T00:00:00Z"
+  }
+}
