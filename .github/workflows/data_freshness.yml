@@ -1,0 +1,40 @@
+name: Data Freshness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check published artifact freshness
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          QUANTORACLE_EOD_PREFIX: eod/nifty50
+          QUANTORACLE_NEWS_PREFIX: news/intel
+          QUANTORACLE_SUPABASE_QUOTES_URL: ${{ vars.QUANTORACLE_SUPABASE_QUOTES_URL }}
+          QUANTORACLE_SUPABASE_EOD_LATEST_URL: ${{ vars.QUANTORACLE_SUPABASE_EOD_LATEST_URL }}
+          QUANTORACLE_NEWS_INTEL_URL: ${{ vars.QUANTORACLE_NEWS_INTEL_URL }}
+        run: |
+          python scripts/check_data_freshness.py --strict > freshness_report.json
+
+      - name: Upload freshness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-freshness-report
+          path: freshness_report.json

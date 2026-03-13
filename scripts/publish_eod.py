@@ -27,7 +27,8 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
+from urllib.parse import quote
 
 import duckdb
 import numpy as np
@@ -42,7 +43,13 @@ if str(ROOT) not in sys.path:
 load_dotenv()
 
 from quant.features import build_features, build_targets
-from quant.registry import data_root, model_version_dir, save_meta, version_id, write_latest
+from quant.registry import (
+    data_root,
+    model_version_dir,
+    save_meta,
+    version_id,
+    write_latest,
+)
 from quant.ridge import fit_ridge, predict, zscore_apply, zscore_fit
 from scripts.groww_api import GrowwAuth, get_access_token, get_candles_range
 from scripts.supabase_storage import from_env
@@ -66,7 +73,9 @@ class YFinance(Provider):
         # yfinance periods are coarse; pick nearest.
         period = "1y" if days <= 365 else "2y" if days <= 730 else "5y"
         try:
-            df = yf.download(sym, period=period, auto_adjust=True, threads=False, progress=False)
+            df = yf.download(
+                sym, period=period, auto_adjust=True, threads=False, progress=False
+            )
         except Exception:
             return pd.DataFrame()
         if not isinstance(df, pd.DataFrame) or df.empty:
@@ -161,12 +170,110 @@ class Groww(Provider):
         if not candles:
             return pd.DataFrame()
 
-        df = pd.DataFrame(candles, columns=["ts", "Open", "High", "Low", "Close", "Volume"])
-        df["ts"] = pd.to_datetime(df["ts"], unit="s", utc=True).dt.tz_convert("Asia/Kolkata").dt.tz_localize(None)
+        df = pd.DataFrame(
+            candles, columns=["ts", "Open", "High", "Low", "Close", "Volume"]
+        )
+        df["ts"] = (
+            pd.to_datetime(df["ts"], unit="s", utc=True)
+            .dt.tz_convert("Asia/Kolkata")
+            .dt.tz_localize(None)
+        )
         df = df.set_index("ts").sort_index()
         df.index = pd.to_datetime(df.index.date)  # normalize to date
         df = df.apply(pd.to_numeric, errors="coerce").dropna(subset=["Close"])
         return df
+
+
+def _load_upstox_symbol_map() -> dict[str, str]:
+    raw = (os.getenv("UPSTOX_SYMBOL_MAP") or "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                return {
+                    str(k).upper(): str(v) for k, v in data.items() if str(v).strip()
+                }
+        except Exception:
+            return {}
+
+    path = (os.getenv("UPSTOX_SYMBOL_MAP_FILE") or "").strip()
+    if path:
+        try:
+            p = Path(path)
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {
+                    str(k).upper(): str(v) for k, v in data.items() if str(v).strip()
+                }
+        except Exception:
+            return {}
+    return {}
+
+
+class Upstox(Provider):
+    def __init__(self, access_token: str, symbol_map: dict[str, str]):
+        super().__init__(name="upstox")
+        self._token = access_token
+        self._symbol_map = {k.upper(): v for k, v in symbol_map.items()}
+        self._warned = 0
+
+    def history(self, sym: str, *, days: int) -> pd.DataFrame:
+        instrument_key = self._symbol_map.get(sym.upper())
+        if not instrument_key:
+            return pd.DataFrame()
+
+        to_dt = datetime.now(timezone.utc).date()
+        from_dt = to_dt - timedelta(days=int(days) + 7)
+        encoded_key = quote(instrument_key, safe="")
+        url = (
+            f"https://api.upstox.com/v2/historical-candle/{encoded_key}/day/"
+            f"{to_dt.strftime('%Y-%m-%d')}/{from_dt.strftime('%Y-%m-%d')}"
+        )
+        try:
+            r = requests.get(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {self._token}",
+                },
+                timeout=25,
+            )
+            if r.status_code != 200:
+                if self._warned < 3:
+                    self._warned += 1
+                    print(f"Upstox {sym} -> {r.status_code}: {(r.text or '')[:200]}")
+                return pd.DataFrame()
+            data = r.json() or {}
+        except Exception:
+            return pd.DataFrame()
+
+        payload = data.get("data") if isinstance(data, dict) else None
+        candles = payload.get("candles") if isinstance(payload, dict) else None
+        if not isinstance(candles, list) or not candles:
+            return pd.DataFrame()
+
+        rows: list[dict[str, Any]] = []
+        for c in candles:
+            if not isinstance(c, list) or len(c) < 6:
+                continue
+            rows.append(
+                {
+                    "Date": pd.to_datetime(c[0]),
+                    "Open": c[1],
+                    "High": c[2],
+                    "Low": c[3],
+                    "Close": c[4],
+                    "Volume": c[5],
+                }
+            )
+
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows).set_index("Date").sort_index()
+        df.index = pd.to_datetime(df.index).tz_localize(None)
+        df.index = pd.to_datetime(df.index.date)
+        return df.apply(pd.to_numeric, errors="coerce").dropna(subset=["Close"])
 
 
 def _read_universe(path: Path) -> list[str]:
@@ -226,7 +333,9 @@ def _write_ohlcv(sym: str, h: pd.DataFrame) -> None:
     con.close()
 
 
-def _build_feature_table(universe: Iterable[str], provider: Provider, *, horizon: int, days: int) -> pd.DataFrame:
+def _build_feature_table(
+    universe: Iterable[str], provider: Provider, *, horizon: int, days: int
+) -> pd.DataFrame:
     rows: list[pd.DataFrame] = []
     for sym in universe:
         h = provider.history(sym, days=days)
@@ -288,7 +397,13 @@ def _write_model(meta: dict, model: dict, *, model_id: str) -> tuple[str, Path]:
     v = version_id()
     out_dir = model_version_dir(model_id, v)
     out_dir.mkdir(parents=True, exist_ok=True)
-    np.savez(out_dir / "model.npz", w=model["w"], mu=model["mu"], sig=model["sig"], features=np.array(model["features"], dtype=object))
+    np.savez(
+        out_dir / "model.npz",
+        w=model["w"],
+        mu=model["mu"],
+        sig=model["sig"],
+        features=np.array(model["features"], dtype=object),
+    )
     save_meta(out_dir, meta)
     write_latest(model_id, v)
     return v, out_dir
@@ -300,20 +415,37 @@ def main() -> int:
     ap.add_argument("--universe-name", default="nifty50")
     ap.add_argument("--horizon", type=int, default=5)
     ap.add_argument("--alpha", type=float, default=10.0)
-    ap.add_argument("--history-days", type=int, default=365, help="History window to fetch per symbol")
-    ap.add_argument("--provider", choices=["auto", "groww", "eodhd", "yfinance"], default="auto")
-    ap.add_argument("--upload", action="store_true", help="Upload artifacts to Supabase Storage")
-    ap.add_argument("--prefix", default="", help="Remote prefix (default: eod/<universe-name>)")
+    ap.add_argument(
+        "--history-days",
+        type=int,
+        default=365,
+        help="History window to fetch per symbol",
+    )
+    ap.add_argument(
+        "--provider",
+        choices=["auto", "upstox", "groww", "eodhd", "yfinance"],
+        default="auto",
+    )
+    ap.add_argument(
+        "--upload", action="store_true", help="Upload artifacts to Supabase Storage"
+    )
+    ap.add_argument(
+        "--prefix", default="", help="Remote prefix (default: eod/<universe-name>)"
+    )
     args = ap.parse_args()
 
     universe = _read_universe(Path(args.universe_file))
     if not universe:
         raise SystemExit("Empty universe file")
 
+    upstox_token = (os.getenv("UPSTOX_ACCESS_TOKEN") or "").strip()
+    upstox_map = _load_upstox_symbol_map()
     eodhd_key = (os.getenv("EODHD_API_KEY") or "").strip()
     groww_key = (os.getenv("GROWW_API_KEY") or "").strip()
     groww_secret = (os.getenv("GROWW_API_SECRET") or "").strip()
     providers: list[Provider] = []
+    if args.provider in ("auto", "upstox") and upstox_token and upstox_map:
+        providers.append(Upstox(upstox_token, upstox_map))
     if args.provider in ("auto", "groww") and groww_key and groww_secret:
         providers.append(Groww(groww_key, groww_secret))
     if args.provider in ("auto", "eodhd") and eodhd_key:
@@ -321,15 +453,21 @@ def main() -> int:
     if args.provider in ("auto", "yfinance") or not providers:
         providers.append(YFinance())
 
+    if args.provider == "upstox" and (not upstox_token or not upstox_map):
+        raise SystemExit("Missing UPSTOX_ACCESS_TOKEN and/or UPSTOX_SYMBOL_MAP")
     if args.provider in ("auto", "groww") and not (groww_key and groww_secret):
         print("Note: GROWW_API_KEY/GROWW_API_SECRET not set; skipping Groww.")
     if args.provider in ("auto", "eodhd") and not eodhd_key:
         print("Note: EODHD_API_KEY not set; skipping EODHD.")
+    if args.provider in ("auto", "upstox") and not (upstox_token and upstox_map):
+        print("Note: UPSTOX_ACCESS_TOKEN/UPSTOX_SYMBOL_MAP not set; skipping Upstox.")
 
     df = pd.DataFrame()
     used = None
     for p in providers:
-        df = _build_feature_table(universe, p, horizon=args.horizon, days=args.history_days)
+        df = _build_feature_table(
+            universe, p, horizon=args.horizon, days=args.history_days
+        )
         if not df.empty:
             used = p.name
             break
@@ -346,7 +484,13 @@ def main() -> int:
 
     model_id = f"ridge_h{args.horizon}"
     meta, model = _train_ridge(df, horizon=args.horizon, alpha=args.alpha)
-    meta.update({"universe": args.universe_name, "universe_size": len(universe), "provider": used or ""})
+    meta.update(
+        {
+            "universe": args.universe_name,
+            "universe_size": len(universe),
+            "provider": used or "",
+        }
+    )
     v, model_dir = _write_model(meta, model, model_id=model_id)
 
     latest = {
@@ -359,35 +503,65 @@ def main() -> int:
         "provider": used or "",
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    (root / "eod_latest.json").write_text(json.dumps(latest, indent=2), encoding="utf-8")
+    (root / "eod_latest.json").write_text(
+        json.dumps(latest, indent=2), encoding="utf-8"
+    )
 
     print(f"Wrote features -> {feat_path}")
     print(f"Wrote model -> {model_dir}")
-    print(f"As-of {as_of} universe={args.universe_name} n={len(universe)} provider={used} model={model_id}@{v}")
+    print(
+        f"As-of {as_of} universe={args.universe_name} n={len(universe)} provider={used} model={model_id}@{v}"
+    )
 
     if not args.upload:
         return 0
 
     sb = from_env(require_write=True)
     if not sb:
-        raise SystemExit("Missing SUPABASE_URL/SUPABASE_BUCKET/SUPABASE_SERVICE_ROLE_KEY for upload")
+        raise SystemExit(
+            "Missing SUPABASE_URL/SUPABASE_BUCKET/SUPABASE_SERVICE_ROLE_KEY for upload"
+        )
 
     prefix = args.prefix.strip().strip("/") or f"eod/{args.universe_name}"
 
     # Upload features + model files first.
-    sb.upload_bytes(f"{prefix}/features.parquet", feat_path.read_bytes(), content_type="application/octet-stream")
-    sb.upload_bytes(f"{prefix}/models/{model_id}/{v}/model.npz", (model_dir / "model.npz").read_bytes(), content_type="application/octet-stream")
-    sb.upload_bytes(f"{prefix}/models/{model_id}/{v}/meta.json", (model_dir / "meta.json").read_bytes(), content_type="application/json")
-    sb.upload_bytes(f"{prefix}/models/{model_id}/LATEST", (root / "models" / model_id / "LATEST").read_bytes(), content_type="text/plain")
+    sb.upload_bytes(
+        f"{prefix}/features.parquet",
+        feat_path.read_bytes(),
+        content_type="application/octet-stream",
+    )
+    sb.upload_bytes(
+        f"{prefix}/models/{model_id}/{v}/model.npz",
+        (model_dir / "model.npz").read_bytes(),
+        content_type="application/octet-stream",
+    )
+    sb.upload_bytes(
+        f"{prefix}/models/{model_id}/{v}/meta.json",
+        (model_dir / "meta.json").read_bytes(),
+        content_type="application/json",
+    )
+    sb.upload_bytes(
+        f"{prefix}/models/{model_id}/LATEST",
+        (root / "models" / model_id / "LATEST").read_bytes(),
+        content_type="text/plain",
+    )
 
     # Upload per-symbol OHLCV snapshots (used by Streamlit Cloud to avoid yfinance at runtime).
     for sym in universe:
         p = _ohlcv_path(sym)
         if p.exists():
-            sb.upload_bytes(f"{prefix}/ohlcv/{p.name}", p.read_bytes(), content_type="application/octet-stream")
+            sb.upload_bytes(
+                f"{prefix}/ohlcv/{p.name}",
+                p.read_bytes(),
+                content_type="application/octet-stream",
+            )
 
     # Publish latest.json last (\"last good snapshot\" rule).
-    sb.upload_bytes(f"{prefix}/latest.json", json.dumps(latest, indent=2).encode("utf-8"), content_type="application/json")
+    sb.upload_bytes(
+        f"{prefix}/latest.json",
+        json.dumps(latest, indent=2).encode("utf-8"),
+        content_type="application/json",
+    )
 
     print(f"Uploaded -> {sb.public_url(f'{prefix}/latest.json')}")
     return 0
