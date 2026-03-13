@@ -1,13 +1,16 @@
-name: EOD Pipeline
+name: News Intel Daily
 
 on:
   workflow_dispatch:
   schedule:
-    # Weekdays 10:45 UTC (~16:15 IST) - after NSE close.
-    - cron: "45 10 * * 1-5"
+    - cron: "30 2 * * *"
+
+concurrency:
+  group: news-intel-daily
+  cancel-in-progress: true
 
 jobs:
-  eod:
+  news:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -22,16 +25,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build + publish EOD snapshot
+      - name: Build + publish daily news intel
         env:
           QUANTORACLE_DATA_DIR: data
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          UPSTOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_ACCESS_TOKEN }}
-          UPSTOX_SYMBOL_MAP: ${{ secrets.UPSTOX_SYMBOL_MAP }}
-          GROWW_API_KEY: ${{ secrets.GROWW_API_KEY }}
-          GROWW_API_SECRET: ${{ secrets.GROWW_API_SECRET }}
-          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+          QUANTORACLE_NEWS_PREFIX: news/intel
+          NEWSDATA_API_KEY: ${{ secrets.NEWSDATA_API_KEY }}
+          GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
         run: |
-          python scripts/publish_eod.py --universe-file data/universe/nifty50.txt --universe-name nifty50 --horizon 5 --provider auto --upload
+          python scripts/publish_news_intel.py --max-items 60 --upload

@@ -1,4 +1,5 @@
 import pytest
+import pandas as pd
 
 pytestmark = pytest.mark.unit
 
@@ -15,7 +16,9 @@ def test_get_quote_contract_offline(stub_yfinance, stub_requests):
         assert isinstance(q[k], (int, float))
 
 
-def test_get_quote_contract_normalized_even_if_indianapi_hits(monkeypatch, stub_yfinance):
+def test_get_quote_contract_normalized_even_if_indianapi_hits(
+    monkeypatch, stub_yfinance
+):
     """
     Simulate IndianAPI returning a valid price and require that get_quote still returns
     the full normalized schema (open/high/low/volume as well).
@@ -39,9 +42,14 @@ def test_get_quote_contract_normalized_even_if_indianapi_hits(monkeypatch, stub_
 
 
 def test_get_historical_contract_offline(stub_yfinance, stub_requests):
-    from services.market_data import get_historical
+    import services.market_data as md
 
-    h = get_historical("RELIANCE.NS", "1mo")
+    md.ALLOW_YFINANCE_INDIA = True
+    md.DISABLE_YFINANCE_INDIA = False
+    if hasattr(md.get_historical, "clear"):
+        md.get_historical.clear()
+
+    h = md.get_historical("RELIANCE.NS", "1mo")
     assert hasattr(h, "empty")
     assert not h.empty
     for col in ("Open", "High", "Low", "Close", "Volume"):
@@ -49,9 +57,16 @@ def test_get_historical_contract_offline(stub_yfinance, stub_requests):
 
 
 def test_get_indicators_contract_offline(stub_yfinance, stub_requests):
-    from services.market_data import get_indicators
+    import services.market_data as md
 
-    ind = get_indicators("RELIANCE.NS")
+    md.ALLOW_YFINANCE_INDIA = True
+    md.DISABLE_YFINANCE_INDIA = False
+    if hasattr(md.get_historical, "clear"):
+        md.get_historical.clear()
+    if hasattr(md.get_indicators, "clear"):
+        md.get_indicators.clear()
+
+    ind = md.get_indicators("RELIANCE.NS")
     assert isinstance(ind, dict)
     # May be empty if not enough data; our stub has enough.
     assert ind
@@ -71,3 +86,31 @@ def test_get_indicators_contract_offline(stub_yfinance, stub_requests):
         "bb_position",
     ):
         assert k in ind
+
+
+def test_crypto_quote_can_use_coingecko(monkeypatch, stub_yfinance):
+    import services.market_data as md
+
+    if hasattr(md.get_quote, "clear"):
+        md.get_quote.clear()
+
+    monkeypatch.setattr(
+        md, "_yahoo_history", lambda sym, period: pd.DataFrame(), raising=True
+    )
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"bitcoin": {"usd": 61000, "usd_24h_change": 2.5}}
+
+    def fake_get(url, params=None, headers=None, timeout=5):  # noqa: ARG001
+        return _Resp()
+
+    monkeypatch.setattr(md.requests, "get", fake_get, raising=True)
+
+    q = md.get_quote("BTC-USD")
+    assert q["symbol"] == "BTC-USD"
+    assert q["source"] == "CoinGecko"
+    assert q["price"] == 61000.0

@@ -18,10 +18,10 @@ jobs:
   quotes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -37,7 +37,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UPSTOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_ACCESS_TOKEN }}
+          UPSTOX_SYMBOL_MAP: ${{ secrets.UPSTOX_SYMBOL_MAP }}
           GROWW_API_KEY: ${{ secrets.GROWW_API_KEY }}
           GROWW_API_SECRET: ${{ secrets.GROWW_API_SECRET }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
         run: |
-          python scripts/publish_quotes.py --universe-file data/universe/india_core.txt --prefix eod/nifty50 --provider groww --upload
+          python scripts/publish_quotes.py --universe-file data/universe/india_core.txt --prefix eod/nifty50 --provider auto --upload

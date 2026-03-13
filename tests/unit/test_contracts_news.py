@@ -39,3 +39,35 @@ def test_market_news_contract_offline(monkeypatch, stub_requests):
     a = items[0]
     for k in ("headline", "summary", "url", "source", "datetime"):
         assert k in a
+
+
+def test_search_news_uses_gnews_fallback(monkeypatch, stub_requests):
+    import utils.news_service as ns
+
+    monkeypatch.setattr(ns, "NEWSDATA", "", raising=True)
+    monkeypatch.setattr(ns, "THENEWSAPI", "", raising=True)
+    monkeypatch.setattr(ns, "GNEWS", "gnews-key", raising=True)
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "articles": [
+                    {
+                        "title": "BTC rallies on ETF flows",
+                        "description": "Market update",
+                        "url": "https://example.com/a",
+                        "source": {"name": "GNews"},
+                        "publishedAt": "2026-03-12T10:00:00Z",
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(ns.requests, "get", lambda *a, **k: _Resp(), raising=True)
+
+    items = ns.search_news("bitcoin")
+    assert items
+    assert items[0]["headline"] == "BTC rallies on ETF flows"
+    assert items[0]["source"] == "GNews"
