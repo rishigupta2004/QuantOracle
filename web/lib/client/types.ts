@@ -10,6 +10,8 @@ export type Quote = {
   source: string
   available: boolean
   stale: boolean
+  quality: number
+  confidence: "high" | "medium" | "low" | "weak"
   as_of_utc?: string
   message?: string
 }
@@ -22,6 +24,8 @@ export type QuotesResponse = {
   stale: boolean
   snapshot_as_of_utc: string | null
   diagnostics: {
+    runtime_ms: number
+    cache_hit: boolean
     keys: Record<string, boolean>
     snapshot: {
       ok: boolean
@@ -108,6 +112,8 @@ export type StatusResponse = {
     quotes: {
       as_of_utc: string
       provider_breakdown: Record<string, number>
+      runtime_ms: number
+      cache_hit: boolean
       stale: boolean
       india_live_observed: boolean
       global_live_observed: boolean

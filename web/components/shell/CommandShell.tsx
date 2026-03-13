@@ -533,6 +533,7 @@ export function CommandShell({
                   <th>Symbol</th>
                   <th>Price</th>
                   <th>Change</th>
+                  <th>Conf</th>
                   <th>Source</th>
                 </tr>
               </thead>
@@ -544,6 +545,7 @@ export function CommandShell({
                     <td className={q.change_pct >= 0 ? "up" : "down"}>
                       {q.available ? `${q.change_pct >= 0 ? "+" : ""}${fmt(q.change_pct)}%` : "-"}
                     </td>
+                    <td>{q.available ? q.confidence : "-"}</td>
                     <td>
                       {q.source}
                       {q.stale ? " (stale)" : ""}
@@ -691,7 +693,7 @@ export function CommandShell({
                   onClick={() => setActiveSymbol(symbol)}
                 >
                   <span>{symbol}</span>
-                  <span className={q?.change_pct && q.change_pct >= 0 ? "up" : "down"}>
+                  <span className={(q?.change_pct ?? 0) >= 0 ? "up" : "down"}>
                     {q?.available ? `${q.change_pct >= 0 ? "+" : ""}${q.change_pct.toFixed(2)}%` : "N/A"}
                   </span>
                 </button>
@@ -718,6 +720,16 @@ export function CommandShell({
             <div className="wm-mini-row">
               <span>Errors</span>
               <span className={errors.length > 0 ? "warn" : "ok"}>{errors.length}</span>
+            </div>
+            <div className="wm-mini-row">
+              <span>Quote Runtime</span>
+              <span>{quotes?.diagnostics.runtime_ms ?? "-"} ms</span>
+            </div>
+            <div className="wm-mini-row">
+              <span>Quote Cache</span>
+              <span className={quotes?.diagnostics.cache_hit ? "ok" : "warn"}>
+                {quotes?.diagnostics.cache_hit ? "hit" : "live"}
+              </span>
             </div>
           </div>
         </SideDrawer>
@@ -782,6 +794,24 @@ export function CommandShell({
               <span>News Chain</span>
               <span className={status?.readiness.news_live_chain ? "ok" : "warn"}>
                 {status?.readiness.news_live_chain ? "active" : "limited"}
+              </span>
+            </div>
+            <div className="wm-mini-row">
+              <span>News Fresh</span>
+              <span className={status?.readiness.news_intel_fresh ? "ok" : "warn"}>
+                {status?.readiness.news_intel_fresh ? "fresh" : "stale"}
+              </span>
+            </div>
+            <div className="wm-mini-row">
+              <span>Official Mix</span>
+              <span className={status?.readiness.news_official_mix ? "ok" : "warn"}>
+                {status?.readiness.news_official_mix ? "yes" : "low"}
+              </span>
+            </div>
+            <div className="wm-mini-row">
+              <span>Oil Coverage</span>
+              <span className={status?.readiness.oil_refinery_coverage ? "ok" : "warn"}>
+                {status?.readiness.oil_refinery_coverage ? "active" : "thin"}
               </span>
             </div>
           </div>

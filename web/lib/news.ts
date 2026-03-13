@@ -50,6 +50,37 @@ export type NewsSnapshotInfo = {
   error: string | null
 }
 
+type IntelCacheEntry = {
+  expiresAt: number
+  payload: NewsIntelPayload | null
+  error: string | null
+  url: string | null
+}
+
+type NewsQueryCacheEntry = {
+  expiresAt: number
+  items: NewsItem[]
+}
+
+const NEWS_INTEL_CACHE_TTL_MS = (() => {
+  const raw = Number(process.env.QUANTORACLE_NEWS_INTEL_CACHE_TTL_MS ?? "60000")
+  if (!Number.isFinite(raw)) {
+    return 60_000
+  }
+  return Math.max(10_000, Math.min(300_000, Math.round(raw)))
+})()
+
+const NEWS_QUERY_CACHE_TTL_MS = (() => {
+  const raw = Number(process.env.QUANTORACLE_NEWS_QUERY_CACHE_TTL_MS ?? "30000")
+  if (!Number.isFinite(raw)) {
+    return 30_000
+  }
+  return Math.max(10_000, Math.min(120_000, Math.round(raw)))
+})()
+
+let intelCache: IntelCacheEntry | null = null
+const newsQueryCache = new Map<string, NewsQueryCacheEntry>()
+
 function hasValue(v: string | undefined): boolean {
   return Boolean((v ?? "").trim())
 }
@@ -113,28 +144,74 @@ type NewsIntelPayload = {
   items?: unknown[]
 }
 
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { cache: "no-store", signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function fetchNewsIntelPayload(): Promise<{
   url: string | null
   payload: NewsIntelPayload | null
   error: string | null
 }> {
+  if (intelCache && intelCache.expiresAt > nowMs()) {
+    return {
+      url: intelCache.url,
+      payload: intelCache.payload,
+      error: intelCache.error
+    }
+  }
+
   const url = buildNewsIntelUrl()
   if (!url) {
     return { url: null, payload: null, error: "news intel URL not configured" }
   }
 
   try {
-    const r = await fetch(url, { cache: "no-store" })
+    const r = await fetchWithTimeout(url, 7000)
     if (!r.ok) {
-      return { url, payload: null, error: `snapshot HTTP ${r.status}` }
+      const miss = { url, payload: null, error: `snapshot HTTP ${r.status}` }
+      intelCache = {
+        expiresAt: nowMs() + NEWS_INTEL_CACHE_TTL_MS,
+        payload: miss.payload,
+        error: miss.error,
+        url: miss.url
+      }
+      return miss
     }
     const payload = (await r.json()) as NewsIntelPayload
     if (!payload || typeof payload !== "object") {
-      return { url, payload: null, error: "snapshot JSON invalid" }
+      const miss = { url, payload: null, error: "snapshot JSON invalid" }
+      intelCache = {
+        expiresAt: nowMs() + NEWS_INTEL_CACHE_TTL_MS,
+        payload: miss.payload,
+        error: miss.error,
+        url: miss.url
+      }
+      return miss
     }
-    return { url, payload, error: null }
+    const hit = { url, payload, error: null }
+    intelCache = {
+      expiresAt: nowMs() + NEWS_INTEL_CACHE_TTL_MS,
+      payload: hit.payload,
+      error: hit.error,
+      url: hit.url
+    }
+    return hit
   } catch {
-    return { url, payload: null, error: "snapshot fetch failed" }
+    const miss = { url, payload: null, error: "snapshot fetch failed" }
+    intelCache = {
+      expiresAt: nowMs() + NEWS_INTEL_CACHE_TTL_MS,
+      payload: miss.payload,
+      error: miss.error,
+      url: miss.url
+    }
+    return miss
   }
 }
 
@@ -307,9 +384,9 @@ async function fromNewsData(query: string): Promise<NewsItem[]> {
   }
   try {
     const q = query || "market OR stocks OR nifty OR crypto"
-    const r = await fetch(
+    const r = await fetchWithTimeout(
       `https://newsdata.io/api/1/news?apikey=${encodeURIComponent(key)}&language=en&q=${encodeURIComponent(q)}`,
-      { cache: "no-store" }
+      6500
     )
     if (!r.ok) {
       return []
@@ -334,9 +411,9 @@ async function fromTheNewsApi(query: string): Promise<NewsItem[]> {
   }
   try {
     const q = query || "stock market"
-    const r = await fetch(
+    const r = await fetchWithTimeout(
       `https://api.thenewsapi.com/v1/news/all?api_token=${encodeURIComponent(key)}&language=en&search=${encodeURIComponent(q)}&limit=20`,
-      { cache: "no-store" }
+      6500
     )
     if (!r.ok) {
       return []
@@ -361,9 +438,9 @@ async function fromGNews(query: string): Promise<NewsItem[]> {
   }
   try {
     const q = query || "stock market"
-    const r = await fetch(
+    const r = await fetchWithTimeout(
       `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=en&max=20&apikey=${encodeURIComponent(key)}`,
-      { cache: "no-store" }
+      6500
     )
     if (!r.ok) {
       return []
@@ -396,7 +473,7 @@ async function fromRss(query: string): Promise<NewsItem[]> {
   const q = query || "stock market"
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`
   try {
-    const r = await fetch(url, { cache: "no-store" })
+    const r = await fetchWithTimeout(url, 6000)
     if (!r.ok) {
       return []
     }
@@ -418,12 +495,27 @@ async function fromRss(query: string): Promise<NewsItem[]> {
 }
 
 export async function getNews(query: string): Promise<NewsItem[]> {
+  const normalizedQuery = query.trim().toLowerCase()
+  const cached = newsQueryCache.get(normalizedQuery)
+  if (cached && cached.expiresAt > nowMs()) {
+    return cached.items
+  }
+
   const chain = [fromPublishedIntel, fromNewsData, fromTheNewsApi, fromGNews, fromRss]
   for (const source of chain) {
     const items = await source(query)
     if (items.length > 0) {
+      newsQueryCache.set(normalizedQuery, {
+        expiresAt: nowMs() + NEWS_QUERY_CACHE_TTL_MS,
+        items
+      })
       return items
     }
   }
+
+  newsQueryCache.set(normalizedQuery, {
+    expiresAt: nowMs() + NEWS_QUERY_CACHE_TTL_MS,
+    items: []
+  })
   return []
 }

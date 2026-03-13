@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import type {
   MacroResponse,
@@ -52,6 +52,11 @@ function withError(prev: string[], msg: string): string[] {
 
 export function useCommandData(workspaceId: string, watchlist: string[]) {
   const [state, setState] = useState<CommandDataState>(EMPTY)
+  const inFlight = useRef({
+    usage: false,
+    quotes: false,
+    macroNewsStatus: false
+  })
 
   const watchlistParam = useMemo(
     () => encodeURIComponent(watchlist.join(",")),
@@ -59,44 +64,68 @@ export function useCommandData(workspaceId: string, watchlist: string[]) {
   )
 
   const loadUsage = useCallback(async () => {
-    const data = await fetchJson<UsagePayload>(
-      `/api/billing/workspaces/${encodeURIComponent(workspaceId)}/usage`
-    )
-    setState((prev) => ({
-      ...prev,
-      usage: data ?? prev.usage,
-      errors: data ? prev.errors : withError(prev.errors, "billing unavailable")
-    }))
+    if (inFlight.current.usage) {
+      return
+    }
+    inFlight.current.usage = true
+    try {
+      const data = await fetchJson<UsagePayload>(
+        `/api/billing/workspaces/${encodeURIComponent(workspaceId)}/usage`
+      )
+      setState((prev) => ({
+        ...prev,
+        usage: data ?? prev.usage,
+        errors: data ? prev.errors : withError(prev.errors, "billing unavailable")
+      }))
+    } finally {
+      inFlight.current.usage = false
+    }
   }, [workspaceId])
 
   const loadQuotes = useCallback(async () => {
-    const data = await fetchJson<QuotesResponse>(`/api/quotes?symbols=${watchlistParam}`)
-    setState((prev) => ({
-      ...prev,
-      quotes: data ?? prev.quotes,
-      lastUpdatedUtc: data?.as_of_utc ?? prev.lastUpdatedUtc,
-      errors: data ? prev.errors : withError(prev.errors, "quotes unavailable")
-    }))
+    if (inFlight.current.quotes) {
+      return
+    }
+    inFlight.current.quotes = true
+    try {
+      const data = await fetchJson<QuotesResponse>(`/api/quotes?symbols=${watchlistParam}`)
+      setState((prev) => ({
+        ...prev,
+        quotes: data ?? prev.quotes,
+        lastUpdatedUtc: data?.as_of_utc ?? prev.lastUpdatedUtc,
+        errors: data ? prev.errors : withError(prev.errors, "quotes unavailable")
+      }))
+    } finally {
+      inFlight.current.quotes = false
+    }
   }, [watchlistParam])
 
   const loadMacroNewsStatus = useCallback(async () => {
-    const [macro, news, status] = await Promise.all([
-      fetchJson<MacroResponse>("/api/macro"),
-      fetchJson<NewsApiResponse>("/api/news?limit=12"),
-      fetchJson<StatusResponse>("/api/status?probe=1")
-    ])
+    if (inFlight.current.macroNewsStatus) {
+      return
+    }
+    inFlight.current.macroNewsStatus = true
+    try {
+      const [macro, news, status] = await Promise.all([
+        fetchJson<MacroResponse>("/api/macro"),
+        fetchJson<NewsApiResponse>("/api/news?limit=12"),
+        fetchJson<StatusResponse>("/api/status?probe=1")
+      ])
 
-    setState((prev) => ({
-      ...prev,
-      macro: macro ?? prev.macro,
-      news: news?.items ?? prev.news,
-      status: status ?? prev.status,
-      errors: [
-        ...(macro ? [] : ["macro unavailable"]),
-        ...(news ? [] : ["news unavailable"]),
-        ...(status ? [] : ["status unavailable"])
-      ].reduce(withError, prev.errors)
-    }))
+      setState((prev) => ({
+        ...prev,
+        macro: macro ?? prev.macro,
+        news: news?.items ?? prev.news,
+        status: status ?? prev.status,
+        errors: [
+          ...(macro ? [] : ["macro unavailable"]),
+          ...(news ? [] : ["news unavailable"]),
+          ...(status ? [] : ["status unavailable"])
+        ].reduce(withError, prev.errors)
+      }))
+    } finally {
+      inFlight.current.macroNewsStatus = false
+    }
   }, [])
 
   const refreshAll = useCallback(async () => {

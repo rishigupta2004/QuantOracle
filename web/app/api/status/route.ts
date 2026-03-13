@@ -70,6 +70,8 @@ export async function GET(req: NextRequest) {
       quotes: {
         as_of_utc: quotesProbe.as_of_utc,
         provider_breakdown: quotesProbe.provider_breakdown,
+        runtime_ms: quotesProbe.diagnostics.runtime_ms,
+        cache_hit: quotesProbe.diagnostics.cache_hit,
         stale: quotesProbe.stale,
         india_live_observed: indiaLive,
         global_live_observed: globalLive

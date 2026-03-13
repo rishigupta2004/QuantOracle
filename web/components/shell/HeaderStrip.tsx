@@ -45,6 +45,26 @@ function marketSessionNow() {
   return { ist, utc }
 }
 
+function ageLabel(iso: string | null | undefined): string {
+  if (!iso) {
+    return "n/a"
+  }
+  const ts = new Date(iso).valueOf()
+  if (!Number.isFinite(ts)) {
+    return "n/a"
+  }
+  const mins = Math.max(0, Math.floor((Date.now() - ts) / 60_000))
+  if (mins < 1) {
+    return "<1m"
+  }
+  if (mins < 60) {
+    return `${mins}m`
+  }
+  const hrs = Math.floor(mins / 60)
+  const rem = mins % 60
+  return `${hrs}h ${rem}m`
+}
+
 export function HeaderStrip({
   workspaceId,
   plan,
@@ -72,6 +92,9 @@ export function HeaderStrip({
   }, [])
 
   const readiness = status?.readiness
+  const quoteAge = ageLabel(status?.probe?.quotes.as_of_utc)
+  const quoteRuntime = status?.probe?.quotes.runtime_ms
+  const quoteCache = status?.probe?.quotes.cache_hit
 
   return (
     <header className="wm-header-strip">
@@ -86,9 +109,15 @@ export function HeaderStrip({
         <span className={`wm-indicator ${readiness?.global_live_ready ? "ok" : "warn"}`}>
           GLOBAL {readiness?.global_live_ready ? "LIVE" : "LIMITED"}
         </span>
+        <span className={`wm-indicator ${readiness?.news_intel_fresh ? "ok" : "warn"}`}>
+          NEWS {readiness?.news_intel_fresh ? "FRESH" : "STALE"}
+        </span>
       </div>
 
       <div className="wm-header-right">
+        <span className="wm-mono">Q AGE {quoteAge}</span>
+        <span className="wm-mono">Q RT {quoteRuntime ?? "-"}ms</span>
+        <span className={`wm-indicator ${quoteCache ? "ok" : "warn"}`}>Q {quoteCache ? "CACHE" : "LIVE"}</span>
         <span className="wm-mono">IST {clock.ist}</span>
         <span className="wm-mono">UTC {clock.utc}</span>
         <button type="button" className="wm-header-btn" onClick={onToggleLeft}>

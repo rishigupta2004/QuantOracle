@@ -11,12 +11,15 @@ function itemText(q: Quote): string {
     return `${q.symbol} N/A`
   }
   const pct = `${q.change_pct >= 0 ? "+" : ""}${q.change_pct.toFixed(2)}%`
-  return `${q.symbol} ${q.price.toFixed(2)} ${pct}`
+  const stale = q.stale ? " STALE" : ""
+  return `${q.symbol} ${q.price.toFixed(2)} ${pct} ${q.confidence.toUpperCase()}${stale}`
 }
 
 export function TickerTape({ quotes }: Props) {
   const entries = Object.values(quotes)
-  const text = (entries.length > 0 ? entries : [{ symbol: "DATA", price: 0, change_pct: 0, volume: 0, source: "none", available: false, stale: true }])
+  const text = (entries.length > 0
+    ? entries
+    : [{ symbol: "DATA", price: 0, change_pct: 0, volume: 0, source: "none", available: false, stale: true, quality: 0, confidence: "weak" as const }])
     .map(itemText)
     .join("  |  ")
 

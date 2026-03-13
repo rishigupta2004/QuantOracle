@@ -8,6 +8,8 @@ export type Quote = {
   source: string
   available: boolean
   stale: boolean
+  quality: number
+  confidence: "high" | "medium" | "low" | "weak"
   as_of_utc?: string
   message?: string
 }
@@ -20,6 +22,8 @@ export type QuotesPayload = {
   stale: boolean
   snapshot_as_of_utc: string | null
   diagnostics: {
+    runtime_ms: number
+    cache_hit: boolean
     keys: {
       upstox_access_token: boolean
       upstox_symbol_map: boolean
@@ -64,6 +68,21 @@ type SnapshotResult = {
   quotes: Record<string, Quote>
 }
 
+type QuotesCacheEntry = {
+  expiresAt: number
+  payload: QuotesPayload
+}
+
+const QUOTES_CACHE_TTL_MS = (() => {
+  const raw = Number(process.env.QUANTORACLE_QUOTES_CACHE_TTL_MS ?? "8000")
+  if (!Number.isFinite(raw)) {
+    return 8000
+  }
+  return Math.max(2000, Math.min(60_000, Math.round(raw)))
+})()
+
+const quotesCache = new Map<string, QuotesCacheEntry>()
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -77,6 +96,105 @@ function hasValue(v: string | undefined): boolean {
   return Boolean((v ?? "").trim())
 }
 
+function sourceBaseQuality(source: string): number {
+  if (source === "upstox") {
+    return 95
+  }
+  if (source === "finnhub") {
+    return 89
+  }
+  if (source === "eodhd") {
+    return 85
+  }
+  if (source === "coingecko") {
+    return 84
+  }
+  if (source === "yahoo") {
+    return 78
+  }
+  if (source === "supabase_snapshot") {
+    return 72
+  }
+  return 45
+}
+
+function confidenceFromQuality(score: number): Quote["confidence"] {
+  if (score >= 88) {
+    return "high"
+  }
+  if (score >= 74) {
+    return "medium"
+  }
+  if (score >= 58) {
+    return "low"
+  }
+  return "weak"
+}
+
+function normalizeQuality(score: number): number {
+  return Math.max(0, Math.min(100, Math.round(score)))
+}
+
+function quoteMoveLimit(symbol: string): number {
+  if (isCryptoSymbol(symbol)) {
+    return 90
+  }
+  if (isIndiaSymbol(symbol)) {
+    return 45
+  }
+  return 60
+}
+
+function quoteLooksPlausible(symbol: string, changePct: number): boolean {
+  if (!Number.isFinite(changePct)) {
+    return false
+  }
+  return Math.abs(changePct) <= quoteMoveLimit(symbol)
+}
+
+function quoteQuality(symbol: string, source: string, changePct: number, stale: boolean): number {
+  let score = sourceBaseQuality(source)
+  if (stale) {
+    score -= 18
+  }
+  const absMove = Math.abs(Number.isFinite(changePct) ? changePct : 0)
+  if (absMove > 10) {
+    const movementPenalty = Math.min(26, (absMove - 10) * (26 / (quoteMoveLimit(symbol) - 10)))
+    score -= movementPenalty
+  }
+  return normalizeQuality(score)
+}
+
+function cacheKeyForSymbols(symbols: string[]): string {
+  return symbols.join(",")
+}
+
+function fromQuotesCache(cacheKey: string): QuotesPayload | null {
+  const hit = quotesCache.get(cacheKey)
+  if (!hit) {
+    return null
+  }
+  if (hit.expiresAt <= Date.now()) {
+    quotesCache.delete(cacheKey)
+    return null
+  }
+  return {
+    ...hit.payload,
+    diagnostics: {
+      ...hit.payload.diagnostics,
+      cache_hit: true,
+      runtime_ms: 0
+    }
+  }
+}
+
+function saveQuotesCache(cacheKey: string, payload: QuotesPayload): void {
+  quotesCache.set(cacheKey, {
+    expiresAt: Date.now() + QUOTES_CACHE_TTL_MS,
+    payload
+  })
+}
+
 function emptyQuote(symbol: string, message = "No provider returned a valid price"): Quote {
   return {
     symbol,
@@ -86,11 +204,14 @@ function emptyQuote(symbol: string, message = "No provider returned a valid pric
     source: "unavailable",
     available: false,
     stale: true,
+    quality: 0,
+    confidence: "weak",
     message
   }
 }
 
 function availableQuote(symbol: string, source: string, price: number, changePct: number, volume: number, asOfUtc?: string, stale = false): Quote {
+  const quality = quoteQuality(symbol, source, changePct, stale)
   return {
     symbol,
     price,
@@ -99,6 +220,8 @@ function availableQuote(symbol: string, source: string, price: number, changePct
     source,
     available: price > 0,
     stale,
+    quality,
+    confidence: confidenceFromQuality(quality),
     as_of_utc: asOfUtc
   }
 }
@@ -450,21 +573,31 @@ async function yahooQuote(symbol: string): Promise<Quote> {
 }
 
 async function liveChain(symbol: string, upstoxToken: string, upstoxMap: Record<string, string>, finnhubKey: string, eodhdKey: string): Promise<Quote> {
+  const accept = (candidate: Quote): Quote => {
+    if (!isValid(candidate)) {
+      return candidate
+    }
+    if (!quoteLooksPlausible(symbol, candidate.change_pct)) {
+      return emptyQuote(symbol, `${candidate.source} failed plausibility check`)
+    }
+    return candidate
+  }
+
   let q = emptyQuote(symbol)
   if (isCryptoSymbol(symbol)) {
-    q = await coingeckoQuote(symbol)
+    q = accept(await coingeckoQuote(symbol))
   }
   if (!isValid(q) && isIndiaSymbol(symbol)) {
-    q = await upstoxQuote(symbol, upstoxToken, upstoxMap)
+    q = accept(await upstoxQuote(symbol, upstoxToken, upstoxMap))
   }
   if (!isValid(q)) {
-    q = await finnhubQuote(symbol, finnhubKey)
+    q = accept(await finnhubQuote(symbol, finnhubKey))
   }
   if (!isValid(q)) {
-    q = await eodhdQuote(symbol, eodhdKey)
+    q = accept(await eodhdQuote(symbol, eodhdKey))
   }
   if (!isValid(q)) {
-    q = await yahooQuote(symbol)
+    q = accept(await yahooQuote(symbol))
   }
   return q
 }
@@ -497,7 +630,14 @@ export function getProviderConfigStatus(): ProviderConfigStatus {
 }
 
 export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
+  const startedAt = Date.now()
   const cleaned = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))]
+  const cacheKey = cacheKeyForSymbols(cleaned)
+  const cached = fromQuotesCache(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const upstoxToken = (process.env.UPSTOX_ACCESS_TOKEN ?? "").trim()
   const upstoxMap = parseUpstoxMap()
   const finnhubKey = (process.env.FINNHUB_API_KEY ?? "").trim()
@@ -508,7 +648,8 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
   const quotes: Record<string, Quote> = {}
   const breakdown: Record<string, number> = {}
 
-  for (const symbol of cleaned) {
+  const resolved = await Promise.all(
+    cleaned.map(async (symbol) => {
     const snapshotQuote = snapshot.quotes[symbol]
     let q: Quote = snapshotQuote ?? emptyQuote(symbol)
 
@@ -519,6 +660,11 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
       }
     }
 
+      return [symbol, q] as const
+    })
+  )
+
+  for (const [symbol, q] of resolved) {
     quotes[symbol] = q
     breakdown[q.source] = (breakdown[q.source] ?? 0) + 1
   }
@@ -526,7 +672,7 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
   const stale = Object.values(quotes).some((q) => q.stale || !q.available)
   const config = getProviderConfigStatus()
 
-  return {
+  const payload: QuotesPayload = {
     as_of_utc: nowIso(),
     provider_order: providerOrder,
     provider_breakdown: breakdown,
@@ -534,6 +680,8 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
     stale,
     snapshot_as_of_utc: snapshot.asOfUtc,
     diagnostics: {
+      runtime_ms: Date.now() - startedAt,
+      cache_hit: false,
       keys: config.keys,
       snapshot: {
         url: snapshot.url,
@@ -546,4 +694,7 @@ export async function getQuotes(symbols: string[]): Promise<QuotesPayload> {
     },
     quotes
   }
+
+  saveQuotesCache(cacheKey, payload)
+  return payload
 }
