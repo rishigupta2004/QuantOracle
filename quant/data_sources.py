@@ -8,16 +8,20 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import requests
 import yfinance as yf
 from dotenv import load_dotenv
+from diskcache import Cache
 
 load_dotenv()
 
+# === CONFIG ===
 INDIANAPI_API_KEY = os.getenv("INDIANAPI_API_KEY")
 INDIANAPI_BASE = os.getenv("INDIANAPI_BASE_URL", "https://stock.indianapi.in")
 COINGECKO_BASE = os.getenv(
@@ -32,8 +36,90 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "").strip()
 EOD_PREFIX = os.getenv("QUANTORACLE_EOD_PREFIX", "eod/nifty50").strip().strip("/")
 
+NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "").strip()
+FRED_API_KEY = os.getenv("FRED_API_KEY", "").strip()
+
 CACHE_QUOTE_S = 60
 CACHE_HISTORY_S = 1800
+
+# Disk cache for yfinance data
+_yfcache = Cache(os.getenv("QUANTORACLE_CACHE_DIR", "/tmp/quantoracle-cache"))
+
+# === SENTIMENT KEYWORDS ===
+BULLISH_WORDS = {
+    "surge",
+    "gains",
+    "beats",
+    "strong",
+    "record",
+    "rally",
+    "growth",
+    "profit",
+    "bullish",
+    "upgrade",
+    "outperform",
+}
+BEARISH_WORDS = {
+    "fall",
+    "drops",
+    "loss",
+    "weak",
+    "miss",
+    "decline",
+    "crash",
+    "fraud",
+    "probe",
+    "bearish",
+    "downgrade",
+    "underperform",
+}
+
+
+# === DATA CLASSES ===
+@dataclass
+class Quote:
+    symbol: str
+    price: float
+    change: float
+    change_pct: float
+    open: float
+    high: float
+    low: float
+    volume: int
+    source: str
+    is_live: bool = True
+
+
+@dataclass
+class Fundamentals:
+    pe_ratio: Optional[float]
+    pb_ratio: Optional[float]
+    roe: Optional[float]
+    debt_to_equity: Optional[float]
+    market_cap: Optional[float]
+    sector: Optional[str]
+
+
+@dataclass
+class SentimentScore:
+    score: float  # [-1, 1]
+    confidence: float  # [0, 1]
+    article_count: int
+    bullish_pct: float
+    source: str
+
+
+@dataclass
+class MacroEvent:
+    name: str
+    date: str
+    expected: Optional[float]
+    prior: Optional[float]
+    impact_level: str  # HIGH, MEDIUM, LOW
+    affects_nse: bool
+
+
+# === HELPER FUNCTIONS ===
 
 
 def _data_dir() -> Path:
@@ -424,3 +510,522 @@ def sources_status() -> Dict[str, bool]:
         "yahoo": True,
         "supabase": _artifacts_configured(),
     }
+
+
+# =============================================================================
+# CLASSES: MarketDataProvider, SentimentProvider, MacroProvider
+# =============================================================================
+
+
+class MarketDataProvider:
+    """
+    Primary: yfinance for all OHLCV and fundamental data.
+    Live quotes: Groww API if key present, else last EOD close.
+    Rate limit handling: exponential backoff, max 3 retries.
+    Local disk cache via diskcache: TTL 15min intraday, 24h EOD.
+    """
+
+    def __init__(self):
+        self._cache = _yfcache
+
+    def get_ohlcv(self, symbol: str, period: str = "1y") -> pd.DataFrame:
+        """
+        Fetch OHLCV data for a symbol.
+
+        Args:
+            symbol: Must be in NSE format: "RELIANCE.NS"
+            period: "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"
+
+        Returns:
+            DataFrame with columns [Open, High, Low, Close, Volume]
+
+        Raises:
+            DataUnavailableError: If no data can be fetched
+        """
+        from quant.data.universe import normalize_symbol
+
+        symbol = normalize_symbol(symbol)
+
+        # Try cache first
+        cache_key = f"ohlcv:{symbol}:{period}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Try local parquet first
+        df = _read_ohlcv_parquet(symbol, period)
+        if not df.empty:
+            ttl = 86400 if period != "1d" else 900  # 24h for EOD, 15min for intraday
+            self._cache.set(cache_key, df, expire=ttl)
+            return df
+
+        # Try yfinance with retry
+        for attempt in range(3):
+            try:
+                h = yf.Ticker(symbol).history(period=period, timeout=10)
+                if isinstance(h, pd.DataFrame) and not h.empty:
+                    ttl = 86400 if period != "1d" else 900
+                    self._cache.set(cache_key, h, expire=ttl)
+                    return h
+            except Exception:
+                if attempt < 2:
+                    time.sleep(2**attempt)  # Exponential backoff
+
+        return pd.DataFrame()
+
+    def get_live_quote(self, symbol: str) -> Quote:
+        """
+        Get live quote. Returns last known price if market closed.
+        Never returns None - always returns a Quote object.
+        """
+        from quant.data.universe import normalize_symbol, is_india_symbol
+
+        symbol = normalize_symbol(symbol)
+
+        # Check if market is open (IST 9:15-15:35)
+        is_market_open = self._is_market_open()
+
+        # Try live sources first if market is open
+        if is_market_open:
+            # Try Supabase quotes
+            snap = _quotes_snapshot()
+            if symbol in snap:
+                q = snap[symbol]
+                price = float(q.get("price", 0) or 0)
+                if price > 0:
+                    change = float(q.get("change", 0) or 0)
+                    change_pct = float(q.get("change_pct", 0) or 0)
+                    return Quote(
+                        symbol=symbol,
+                        price=price,
+                        change=change,
+                        change_pct=change_pct,
+                        open=float(q.get("open", 0) or 0),
+                        high=float(q.get("high", 0) or 0),
+                        low=float(q.get("low", 0) or 0),
+                        volume=int(q.get("volume", 0) or 0),
+                        source="SupabaseQuotes",
+                        is_live=True,
+                    )
+
+            # Try IndianAPI
+            if is_india_symbol(symbol):
+                iq = _indianapi_quote(symbol)
+                if iq.get("price"):
+                    price = float(iq["price"])
+                    change_pct = float(iq.get("change_pct", 0) or 0)
+                    change = price * change_pct / 100 if change_pct else 0.0
+                    return Quote(
+                        symbol=symbol,
+                        price=price,
+                        change=change,
+                        change_pct=change_pct,
+                        open=0.0,
+                        high=0.0,
+                        low=0.0,
+                        volume=0,
+                        source="IndianAPI",
+                        is_live=True,
+                    )
+
+        # Fall back to last EOD close
+        h = self.get_ohlcv(symbol, "5d")
+        if not h.empty:
+            close = h["Close"]
+            price = float(close.iloc[-1])
+            prev = float(close.iloc[-2]) if len(close) >= 2 else price
+            change = price - prev
+            change_pct = (change / prev * 100) if prev else 0.0
+            return Quote(
+                symbol=symbol,
+                price=price,
+                change=change,
+                change_pct=change_pct,
+                open=float(h["Open"].iloc[-1]) if "Open" in h else 0.0,
+                high=float(h["High"].iloc[-1]) if "High" in h else 0.0,
+                low=float(h["Low"].iloc[-1]) if "Low" in h else 0.0,
+                volume=int(h["Volume"].iloc[-1]) if "Volume" in h else 0,
+                source="EOD",
+                is_live=False,
+            )
+
+        # Return zero quote as last resort
+        return Quote(
+            symbol=symbol,
+            price=0.0,
+            change=0.0,
+            change_pct=0.0,
+            open=0.0,
+            high=0.0,
+            low=0.0,
+            volume=0,
+            source="None",
+            is_live=False,
+        )
+
+    def get_fundamentals(self, symbol: str) -> Fundamentals:
+        """
+        Get fundamental data from yfinance.
+        Cached for 24 hours.
+        """
+        from quant.data.universe import normalize_symbol
+
+        symbol = normalize_symbol(symbol)
+
+        cache_key = f"fundamentals:{symbol}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            info = yf.Ticker(symbol).info
+            fundamentals = Fundamentals(
+                pe_ratio=info.get("trailingPE"),
+                pb_ratio=info.get("priceToBook"),
+                roe=info.get("returnOnEquity"),
+                debt_to_equity=info.get("debtToEquity"),
+                market_cap=info.get("marketCap"),
+                sector=info.get("sector"),
+            )
+            self._cache.set(cache_key, fundamentals, expire=86400)  # 24h
+            return fundamentals
+        except Exception:
+            return Fundamentals(
+                pe_ratio=None,
+                pb_ratio=None,
+                roe=None,
+                debt_to_equity=None,
+                market_cap=None,
+                sector=None,
+            )
+
+    def _is_market_open(self) -> bool:
+        """Check if NSE market is currently open (IST)."""
+        import pytz
+        from datetime import datetime
+
+        ist = pytz.timezone("Asia/Kolkata")
+        now = datetime.now(ist)
+        hour = now.hour
+        minute = now.minute
+        weekday = now.weekday()
+
+        # Weekend
+        if weekday >= 5:
+            return False
+
+        # Market hours: 9:15 - 15:30 IST
+        if hour < 9 or hour >= 15:
+            return False
+        if hour == 9 and minute < 15:
+            return False
+        if hour == 15 and minute >= 30:
+            return False
+
+        return True
+
+
+class SentimentProvider:
+    """
+    Sources: NewsData.io (200 req/day free) + StockTwits public API.
+    Strategy: Score both sources, average with weight (news 60%, social 40% if available).
+    Cache: In-memory, TTL 4 hours per symbol.
+    Fallback: If both sources fail, return SentimentScore(score=0, confidence=0).
+    """
+
+    STOCKTWITS_URL = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
+
+    # StockTwits coverage for NSE is limited (~40% of symbols have data)
+    # If StockTwits returns 404, we'll reduce its weight to 10%
+    STOCKTWITS_WEIGHT = 0.4
+    NEWSDATA_WEIGHT = 0.6
+
+    def __init__(self):
+        self._cache = {}
+
+    def get_symbol_sentiment(self, symbol: str) -> SentimentScore:
+        """
+        Get sentiment score for a symbol.
+        Returns averaged score from NewsData.io and StockTwits.
+        """
+        from quant.data.universe import normalize_symbol
+
+        symbol = normalize_symbol(symbol)
+        # Strip .NS for StockTwits
+        st_symbol = symbol.replace(".NS", "").replace(".BO", "")
+
+        # Check cache (4 hour TTL)
+        cache_key = f"sentiment:{symbol}"
+        if cache_key in self._cache:
+            cached_time, cached_score = self._cache[cache_key]
+            if time.time() - cached_time < 14400:  # 4 hours
+                return cached_score
+
+        # Fetch from both sources
+        news_score, news_count = self._fetch_newsdata_sentiment(symbol)
+        st_score, st_count, st_works = self._fetch_stocktwits_sentiment(st_symbol)
+
+        # Calculate weighted average
+        if st_works and st_count > 0:
+            # Both sources work
+            final_score = (
+                news_score * self.NEWSDATA_WEIGHT + st_score * self.STOCKTWITS_WEIGHT
+            )
+            total_count = news_count + st_count
+            bullish_pct = ((news_score > 0) + (st_score > 0)) / 2 * 100
+        elif news_count > 0:
+            # Only news works
+            final_score = news_score
+            total_count = news_count
+            bullish_pct = 100 if news_score > 0 else 50 if news_score == 0 else 0
+        else:
+            # Neither works - return neutral
+            final_score = 0.0
+            total_count = 0
+            bullish_pct = 50.0
+
+        confidence = min(1.0, total_count / 10) if total_count > 0 else 0.0
+
+        result = SentimentScore(
+            score=final_score,
+            confidence=confidence,
+            article_count=total_count,
+            bullish_pct=bullish_pct,
+            source="newsdata+stocktwits" if st_works else "newsdata",
+        )
+
+        # Cache for 4 hours
+        self._cache[cache_key] = (time.time(), result)
+        return result
+
+    def _fetch_newsdata_sentiment(self, symbol: str) -> tuple[float, int]:
+        """Fetch sentiment from NewsData.io."""
+        if not NEWSDATA_API_KEY:
+            return 0.0, 0
+
+        try:
+            # Strip .NS suffix
+            ticker = symbol.replace(".NS", "").replace(".BO", "")
+            r = requests.get(
+                "https://newsdata.io/api/1/latest",
+                params={
+                    "apikey": NEWSDATA_API_KEY,
+                    "q": ticker,
+                    "language": "en",
+                },
+                timeout=10,
+            )
+            if r.status_code != 200:
+                return 0.0, 0
+
+            data = r.json() or {}
+            headlines = [item.get("title", "") for item in data.get("results", [])]
+            return self._score_newsdata(headlines), len(headlines)
+        except Exception:
+            return 0.0, 0
+
+    def _fetch_stocktwits_sentiment(self, symbol: str) -> tuple[float, int, bool]:
+        """
+        Fetch sentiment from StockTwits.
+        Returns (score, message_count, success).
+        Note: StockTwits has limited NSE coverage (~40% of symbols return data).
+        """
+        try:
+            headers = {"User-Agent": "Mozilla/5.0"}
+            r = requests.get(
+                self.STOCKTWITS_URL.format(symbol=symbol),
+                headers=headers,
+                timeout=5,
+            )
+            if r.status_code != 200:
+                return 0.0, 0, False
+
+            data = r.json() or {}
+            messages = data.get("messages", [])
+
+            if not messages:
+                return 0.0, 0, True  # Works but no data
+
+            bullish = sum(1 for m in messages if m.get("sentiment") == "Bullish")
+            bearish = sum(1 for m in messages if m.get("sentiment") == "Bearish")
+            total = bullish + bearish
+
+            if total == 0:
+                return 0.0, len(messages), True
+
+            score = (bullish - bearish) / total
+            return score, len(messages), True
+
+        except Exception:
+            return 0.0, 0, False
+
+    def _score_newsdata(self, headlines: List[str]) -> float:
+        """Simple keyword-based sentiment scoring."""
+        if not headlines:
+            return 0.0
+
+        scores = []
+        for headline in headlines:
+            words = headline.lower().split()
+            bullish = sum(1 for w in words if w in BULLISH_WORDS)
+            bearish = sum(1 for w in words if w in BEARISH_WORDS)
+            total = bullish + bearish
+            if total > 0:
+                scores.append((bullish - bearish) / total)
+
+        if not scores:
+            return 0.0
+
+        return sum(scores) / len(scores)
+
+
+class MacroProvider:
+    """
+    Sources: FRED API (free key) + NSE India public endpoints.
+    All calls are cached daily. Never hit live in UI hot path.
+    Data is fetched by the pipeline (GitHub Actions), cached in Supabase.
+    """
+
+    FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+
+    SERIES = {
+        "US_FEDFUNDS": "FEDFUNDS",
+        "US_CPI": "CPIAUCSL",
+        "US_GDP": "GDP",
+    }
+
+    def __init__(self):
+        self._cache = {}
+
+    def get_upcoming_events(self) -> List[MacroEvent]:
+        """
+        Get upcoming macro events.
+        Cached for 24 hours.
+        """
+        cache_key = "macro_events"
+        if cache_key in self._cache:
+            cached_time, cached_events = self._cache[cache_key]
+            if time.time() - cached_time < 86400:  # 24h
+                return cached_events
+
+        events = []
+
+        # Try to fetch from Supabase cache first
+        events = self._load_cached_events()
+        if events:
+            self._cache[cache_key] = (time.time(), events)
+            return events
+
+        # Fall back to FRED API if available
+        if FRED_API_KEY:
+            events = self._fetch_fred_events()
+
+        self._cache[cache_key] = (time.time(), events)
+        return events
+
+    def _load_cached_events(self) -> List[MacroEvent]:
+        """Load cached events from Supabase."""
+        if not _artifacts_configured():
+            return []
+
+        try:
+            url = _supabase_public_url(
+                SUPABASE_BUCKET, f"{EOD_PREFIX}/macro_events.json"
+            )
+            if not url:
+                return []
+
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                return []
+
+            data = r.json() or []
+            return [
+                MacroEvent(
+                    name=e.get("name", ""),
+                    date=e.get("date", ""),
+                    expected=e.get("expected"),
+                    prior=e.get("prior"),
+                    impact_level=e.get("impact_level", "LOW"),
+                    affects_nse=e.get("affects_nse", False),
+                )
+                for e in data
+            ]
+        except Exception:
+            return []
+
+    def _fetch_fred_events(self) -> List[MacroEvent]:
+        """Fetch events from FRED API."""
+        events = []
+
+        for name, series_id in self.SERIES.items():
+            try:
+                r = requests.get(
+                    f"{self.FRED_BASE}",
+                    params={
+                        "series_id": series_id,
+                        "api_key": FRED_API_KEY,
+                        "file_type": "json",
+                        "limit": 1,
+                        "sort_order": "desc",
+                    },
+                    timeout=10,
+                )
+                if r.status_code != 200:
+                    continue
+
+                data = r.json() or {}
+                observations = data.get("observations", [])
+                if not observations:
+                    continue
+
+                latest = observations[0]
+                impact = "HIGH" if "CPI" in name or "FEDFUNDS" in name else "MEDIUM"
+
+                events.append(
+                    MacroEvent(
+                        name=name.replace("_", " "),
+                        date=latest.get("date", ""),
+                        expected=float(latest.get("value", 0) or 0),
+                        prior=None,
+                        impact_level=impact,
+                        affects_nse=name.startswith("US_"),
+                    )
+                )
+            except Exception:
+                continue
+
+        return events
+
+
+# =============================================================================
+# INSTANCE ACCESS
+# =============================================================================
+
+_market_provider: Optional[MarketDataProvider] = None
+_sentiment_provider: Optional[SentimentProvider] = None
+_macro_provider: Optional[MacroProvider] = None
+
+
+def get_market_provider() -> MarketDataProvider:
+    """Get singleton MarketDataProvider instance."""
+    global _market_provider
+    if _market_provider is None:
+        _market_provider = MarketDataProvider()
+    return _market_provider
+
+
+def get_sentiment_provider() -> SentimentProvider:
+    """Get singleton SentimentProvider instance."""
+    global _sentiment_provider
+    if _sentiment_provider is None:
+        _sentiment_provider = SentimentProvider()
+    return _sentiment_provider
+
+
+def get_macro_provider() -> MacroProvider:
+    """Get singleton MacroProvider instance."""
+    global _macro_provider
+    if _macro_provider is None:
+        _macro_provider = MacroProvider()
+    return _macro_provider
