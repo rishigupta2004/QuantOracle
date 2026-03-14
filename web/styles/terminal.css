@@ -43,6 +43,25 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Global scanline overlay - applied to body */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, var(--scanline-opacity)),
+    rgba(0, 0, 0, var(--scanline-opacity)) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
 /* Scanline overlay */
 .terminal-scanlines::after {
   content: '';
@@ -146,7 +165,7 @@ body {
 
 .price-display {
   font-family: var(--font-mono);
-  font-size: 16-24px;
+  font-size: 20px;
   color: var(--text-primary);
 }
 
@@ -163,14 +182,20 @@ body {
   display: inline-block;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
   background: var(--signal-buy);
-  animation: pulse 2s infinite;
+  animation: blink 1s steps(1) infinite;
 }
 
-@keyframes pulse {
+.status-closed {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--text-dim);
+}
+
+@keyframes blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0; }
 }
 
 /* Chart crosshair override */

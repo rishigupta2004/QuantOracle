@@ -101,14 +101,16 @@ export function HeaderStrip({
   return (
     <header className="wm-header-strip">
       <div className="wm-header-left">
-        <span className="wm-brand">QUANTORACLE</span>
+        <span className="wm-brand" style={{ fontFamily: 'var(--font-pixel)', fontSize: '10px' }}>QUANTORACLE</span>
         <span className="wm-sep">|</span>
         <span className="wm-mono">WS: {workspaceId}</span>
         <span className={`wm-plan-pill ${planBadgeColor(plan)}`}>{plan.toUpperCase()}</span>
         <span className={`wm-indicator ${readiness?.india_live_ready ? "ok" : "warn"}`}>
+          <span className={readiness?.india_live_ready ? "status-live" : "status-closed"} style={{ display: 'inline-block', width: '6px', height: '6px', marginRight: '4px' }} />
           INDIA {readiness?.india_live_ready ? "LIVE" : "PENDING"}
         </span>
         <span className={`wm-indicator ${readiness?.global_live_ready ? "ok" : "warn"}`}>
+          <span className={readiness?.global_live_ready ? "status-live" : "status-closed"} style={{ display: 'inline-block', width: '6px', height: '6px', marginRight: '4px' }} />
           GLOBAL {readiness?.global_live_ready ? "LIVE" : "LIMITED"}
         </span>
         <span className={`wm-indicator ${readiness?.news_intel_fresh ? "ok" : "warn"}`}>
@@ -173,7 +175,7 @@ export function HeaderStrip({
           UPGRADE
         </button>
         <button type="button" className="wm-header-btn strong" onClick={onOpenCommand}>
-          CMD+K
+          /
         </button>
         {lastSlotAction ? <span className="wm-mono">{lastSlotAction}</span> : null}
       </div>

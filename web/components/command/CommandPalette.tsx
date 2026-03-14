@@ -11,25 +11,13 @@ type Props = {
 }
 
 const KEYBOARD_SHORTCUTS = [
-  { keys: ["⌘", "K"], action: "Open command palette" },
+  { keys: ["/"], action: "Open command palette" },
+  { keys: ["⌘", "K"], action: "Open command palette (alt)" },
+  { keys: ["Esc"], action: "Close dialogs" },
   { keys: ["⌥", "L"], action: "Toggle left drawer" },
   { keys: ["⌥", "R"], action: "Toggle right drawer" },
-  { keys: ["⌥", "1"], action: "Focus map panel" },
-  { keys: ["⌥", "2"], action: "Focus quotes panel" },
-  { keys: ["⌥", "3"], action: "Focus news panel" },
-  { keys: ["⌥", "4"], action: "Focus macro panel" },
-  { keys: ["⌥", "5"], action: "Focus entitlements" },
-  { keys: ["⌥", "6"], action: "Set atlas layout" },
-  { keys: ["⌥", "7"], action: "Set focus layout" },
-  { keys: ["⌥", "8"], action: "Set stack layout" },
-  { keys: ["⌥", "Q"], action: "Load slot 1" },
-  { keys: ["⌥", "W"], action: "Load slot 2" },
-  { keys: ["⌥", "E"], action: "Load slot 3" },
-  { keys: ["⌥", "⇧", "Q"], action: "Save to slot 1" },
-  { keys: ["⌥", "⇧", "W"], action: "Save to slot 2" },
-  { keys: ["⌥", "⇧", "E"], action: "Save to slot 3" },
-  { keys: ["⌥", "0"], action: "Reset layout" },
-  { keys: ["Esc"], action: "Close dialogs" },
+  { keys: ["↑", "↓"], action: "Navigate results" },
+  { keys: ["Enter"], action: "Execute selected" },
 ]
 
 export function CommandPalette({ open, onClose, commands }: Props) {
@@ -109,7 +97,7 @@ export function CommandPalette({ open, onClose, commands }: Props) {
             setQuery(e.target.value)
             setSelected(0)
           }}
-          placeholder="Type a command or symbol... (press ? for shortcuts)"
+          placeholder="Type symbol or command... (? for shortcuts)"
           className="wm-command-input"
         />
         {showHelp ? (
@@ -129,7 +117,7 @@ export function CommandPalette({ open, onClose, commands }: Props) {
         ) : (
           <div className="wm-command-list">
             {filtered.length > 0 ? (
-              filtered.slice(0, 24).map((cmd, idx) => (
+              filtered.slice(0, 6).map((cmd, idx) => (
                 <button
                   key={cmd.id}
                   type="button"

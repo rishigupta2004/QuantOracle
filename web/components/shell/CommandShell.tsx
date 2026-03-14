@@ -373,6 +373,12 @@ export function CommandShell({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // "/" key opens command palette globally
+      if (e.key === "/") {
+        e.preventDefault()
+        setCommandOpen(true)
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
         setCommandOpen(true)
