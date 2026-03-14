@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@clerk/nextjs": "^5.7.5",
     "@supabase/supabase-js": "^2.99.1",
     "clsx": "^2.1.1",
