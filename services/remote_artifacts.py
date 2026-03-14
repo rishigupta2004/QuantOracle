@@ -1,14 +1,7 @@
-"""Remote artifact sync (Supabase Storage public bucket).
-
-Streamlit Cloud has ephemeral disk; we pull the latest published EOD snapshot into local `data/`
-so the rest of the app can reuse the same registry + parquet readers.
-"""
-
-from __future__ import annotations
+"""Backward compatibility - remote_artifacts module."""
 
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -16,7 +9,9 @@ import requests
 
 from services.store import data_dir
 
-DEFAULT_EOD_PREFIX = os.getenv("QUANTORACLE_EOD_PREFIX", "eod/nifty50").strip().strip("/")
+DEFAULT_EOD_PREFIX = (
+    os.getenv("QUANTORACLE_EOD_PREFIX", "eod/nifty50").strip().strip("/")
+)
 
 
 def _supabase_public_url(bucket: str, path: str) -> Optional[str]:
@@ -56,7 +51,7 @@ def _download(url: str, out: Path) -> bool:
 
 
 def sync_eod(prefix: str = "eod/nifty50") -> Dict[str, Any]:
-    """Fetch latest published artifacts into local `data/`. Returns latest.json content (may be empty)."""
+    """Fetch latest published artifacts into local `data/`."""
     prefix = (prefix or DEFAULT_EOD_PREFIX).strip().strip("/") or DEFAULT_EOD_PREFIX
     meta = fetch_latest_json(prefix)
     if not meta:
@@ -68,12 +63,10 @@ def sync_eod(prefix: str = "eod/nifty50") -> Dict[str, Any]:
 
     root = data_dir()
 
-    # Download features snapshot.
     feat_url = _supabase_public_url(bucket, f"{prefix.rstrip('/')}/features.parquet")
     if feat_url:
         _download(feat_url, root / "features.parquet")
 
-    # Download model registry files if present in meta.
     model_id = str(meta.get("model_id") or "")
     version = str(meta.get("model_version") or "")
     if model_id and version:
@@ -85,8 +78,9 @@ def sync_eod(prefix: str = "eod/nifty50") -> Dict[str, Any]:
         if mjs:
             _download(mjs, root / "models" / model_id / version / "meta.json")
 
-        # LATEST pointer used by registry helpers.
-        latest = _supabase_public_url(bucket, f"{prefix.rstrip('/')}/models/{model_id}/LATEST")
+        latest = _supabase_public_url(
+            bucket, f"{prefix.rstrip('/')}/models/{model_id}/LATEST"
+        )
         if latest:
             _download(latest, root / "models" / model_id / "LATEST")
 
@@ -94,14 +88,13 @@ def sync_eod(prefix: str = "eod/nifty50") -> Dict[str, Any]:
 
 
 def _safe_symbol(sym: str) -> str:
+    import re
+
     return re.sub(r"[^A-Za-z0-9._-]+", "_", sym.upper())
 
 
 def sync_ohlcv(sym: str, prefix: str = "eod/nifty50") -> bool:
-    """Fetch a single symbol OHLCV parquet into local `data/ohlcv/`.
-
-    Returns True if a local file exists after the call.
-    """
+    """Fetch a single symbol OHLCV parquet into local `data/ohlcv/`."""
     prefix = (prefix or DEFAULT_EOD_PREFIX).strip().strip("/") or DEFAULT_EOD_PREFIX
     bucket = os.getenv("SUPABASE_BUCKET", "").strip()
     if not bucket:
@@ -119,7 +112,7 @@ def sync_ohlcv(sym: str, prefix: str = "eod/nifty50") -> bool:
 
 
 def sync_quotes(prefix: str = "eod/nifty50") -> bool:
-    """Fetch latest published intraday quotes snapshot into local `data/quotes.json`."""
+    """Fetch latest intraday quotes snapshot into local `data/quotes.json`."""
     prefix = (prefix or DEFAULT_EOD_PREFIX).strip().strip("/") or DEFAULT_EOD_PREFIX
     bucket = os.getenv("SUPABASE_BUCKET", "").strip()
     if not bucket:

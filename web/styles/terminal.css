@@ -1,0 +1,179 @@
+/* QuantOracle Terminal Design System */
+
+:root {
+  /* === BASE COLORS === */
+  --bg-void: #000000;
+  --bg-base: #0a0a0a;
+  --bg-panel: #0f0f0f;
+  --bg-raised: #161616;
+  --bg-hover: #1c1c1c;
+
+  /* === BORDERS === */
+  --border-dim: #1a1a1a;
+  --border-mid: #2a2a2a;
+  --border-bright: #3a3a3a;
+
+  /* === TEXT === */
+  --text-primary: #e8e8e8;
+  --text-secondary: #8a8a8a;
+  --text-dim: #4a4a4a;
+  --text-accent: #c8ff00;
+
+  /* === SIGNAL COLORS === */
+  --signal-buy: #00ff88;
+  --signal-sell: #ff3355;
+  --signal-hold: #ffcc00;
+  --signal-accumulate: #00ccff;
+  --signal-reduce: #ff8800;
+
+  /* === PIXEL AESTHETIC === */
+  --pixel-size: 2px;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* === SCANLINE EFFECT === */
+  --scanline-opacity: 0.03;
+}
+
+/* Global styles */
+body {
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+/* Scanline overlay */
+.terminal-scanlines::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, var(--scanline-opacity)),
+    rgba(0, 0, 0, var(--scanline-opacity)) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Pixel badge base */
+.pixel-badge {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  padding: 4px 8px;
+  border: none;
+  box-shadow: 
+    2px 0 0 var(--border-bright),
+    -2px 0 0 var(--border-bright),
+    0 2px 0 var(--border-bright),
+    0 -2px 0 var(--border-bright);
+}
+
+/* Signal badges */
+.signal-buy {
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--signal-buy);
+}
+
+.signal-sell {
+  background: rgba(255, 51, 85, 0.1);
+  color: var(--signal-sell);
+}
+
+.signal-hold {
+  background: rgba(255, 204, 0, 0.1);
+  color: var(--signal-hold);
+}
+
+.signal-accumulate {
+  background: rgba(0, 204, 255, 0.1);
+  color: var(--signal-accumulate);
+}
+
+.signal-reduce {
+  background: rgba(255, 136, 0, 0.1);
+  color: var(--signal-reduce);
+}
+
+/* Pixel loader animation */
+@keyframes pixel-scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.pixel-loader::after {
+  content: '';
+  display: block;
+  width: 25%;
+  height: 2px;
+  background: var(--text-accent);
+  animation: pixel-scan 1s steps(8) infinite;
+}
+
+/* Panel styles */
+.terminal-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-dim);
+}
+
+.terminal-panel:hover {
+  border-color: var(--border-mid);
+}
+
+.terminal-panel:focus-within,
+.terminal-panel.active {
+  border-color: var(--border-bright);
+}
+
+/* Typography */
+.pixel-label {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--text-accent);
+  text-transform: uppercase;
+}
+
+.mono-value {
+  font-family: var(--font-mono);
+}
+
+.price-display {
+  font-family: var(--font-mono);
+  font-size: 16-24px;
+  color: var(--text-primary);
+}
+
+.delta-positive {
+  color: var(--signal-buy);
+}
+
+.delta-negative {
+  color: var(--signal-sell);
+}
+
+/* Status indicator */
+.status-live {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-buy);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Chart crosshair override */
+.lightweight-charts-container {
+  cursor: crosshair;
+}

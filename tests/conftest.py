@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "frontend"))
+sys.path.insert(0, str(ROOT))
 
 DEFAULT_WATCHLIST = {
     "nse": ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "IEX.NS", "IRCTC.NS"],

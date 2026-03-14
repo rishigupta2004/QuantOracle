@@ -114,3 +114,27 @@ def test_crypto_quote_can_use_coingecko(monkeypatch, stub_yfinance):
     assert q["symbol"] == "BTC-USD"
     assert q["source"] in {"None", "yahoo", "SupabaseQuotes", "CoinGecko"}
     assert isinstance(q["price"], (int, float))
+
+
+def test_normalize_symbol(stub_yfinance, stub_requests):
+    from services.market_data import normalize_symbol
+
+    assert normalize_symbol("RELIANCE") == "RELIANCE.NS"
+    assert normalize_symbol("RELIANCE.NS") == "RELIANCE.NS"
+    assert normalize_symbol("reliance") == "RELIANCE.NS"
+    assert normalize_symbol("AAPL") == "AAPL"
+    assert normalize_symbol("  TCS  ") == "TCS.NS"
+    assert normalize_symbol("^NSEI") == "NIFTYBEES.NS"
+    assert normalize_symbol("^NSEBANK") == "BANKBEES.NS"
+
+
+def test_get_quote_with_cache(stub_yfinance, stub_requests):
+    from services.market_data import get_quote
+    import services.market_data as md
+
+    if hasattr(md.get_quote, "clear"):
+        md.get_quote.clear()
+
+    q1 = get_quote("RELIANCE.NS")
+    q2 = get_quote("RELIANCE.NS")
+    assert q1["symbol"] == q2["symbol"]
