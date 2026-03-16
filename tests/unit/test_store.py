@@ -1,4 +1,3 @@
-
 import pandas as pd
 import pytest
 
@@ -23,10 +22,9 @@ def test_store_write_read_roundtrip(tmp_path, monkeypatch):
     )
 
     out = write_ohlcv("RELIANCE.NS", h)
-    assert out and out.exists()
+    assert out is True, "write_ohlcv should return True on success"
 
     r = read_ohlcv_period("RELIANCE.NS", "1mo")
     assert not r.empty
     assert "Close" in r.columns
     assert r.index.is_monotonic_increasing
-

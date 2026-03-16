@@ -16,6 +16,7 @@ _ROOT = str(Path(__file__).resolve().parents[1])
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
+# ruff: noqa: E402  # Import must be after sys.path modification
 from quant.core import build_features, build_targets
 from services.store import data_dir, read_ohlcv
 
