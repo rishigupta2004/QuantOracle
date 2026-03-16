@@ -1,71 +1,62 @@
 "use client"
 
-import { CommandShell } from "@/components/shell/CommandShell"
-import { ErrorBoundary } from "@/components/shell/ErrorBoundary"
-import { useToast, ToastContainer } from "@/lib/toast"
-import { useCommandData } from "@/lib/client/useCommandData"
-import { useShellState } from "@/lib/client/useShellState"
+import { useState, useEffect } from "react"
+import { HeaderStrip } from "@/components/shell/HeaderStrip"
+import { CommandPalette } from "@/components/command/CommandPalette"
+import { WatchlistPanel } from "@/components/watchlist/Watchlist"
+import { SignalsPanel } from "@/components/signals/SignalsPanel"
+import { ChartPanel } from "@/components/charts/ChartPanel"
+import { ScreenerPanel } from "@/components/screener/ScreenerPanel"
+import { MacroCalendar } from "@/components/macro/MacroCalendar"
+import { GeoNewsPanel } from "@/components/news/GeoNewsPanel"
+import { PortfolioPanel } from "@/components/portfolio/PortfolioPanel"
 
-const WATCHLIST = [
-  "RELIANCE.NS",
-  "TCS.NS",
-  "HDFCBANK.NS",
-  "AAPL",
-  "MSFT",
-  "NVDA",
-  "BTC-USD",
-  "ETH-USD"
-]
+export default function Home() {
+  const [activeSymbol, setActiveSymbol] = useState("RELIANCE.NS")
+  const [layout, setLayout] = useState<"research"|"screener"|"portfolio"|"lab">("research")
+  const [commandOpen, setCommandOpen] = useState(false)
 
-export default function Page() {
-  const workspaceId = process.env.NEXT_PUBLIC_WORKSPACE_ID || "default"
-  const shell = useShellState(WATCHLIST[0])
-  const data = useCommandData(workspaceId, WATCHLIST)
-  const { toasts, dismissToast } = useToast()
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && !commandOpen) {
+        const target = e.target as HTMLElement
+        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+          e.preventDefault()
+          setCommandOpen(true)
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [commandOpen])
 
   return (
-    <ErrorBoundary>
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-      <CommandShell
-        workspaceId={workspaceId}
-        watchlist={WATCHLIST}
-        usage={data.usage}
-        quotes={data.quotes}
-        macro={data.macro}
-        news={data.news}
-        status={data.status}
-        errors={data.errors}
-        isLoading={data.isLoading}
-        refreshAll={data.refreshAll}
-        isTabVisible={data.isTabVisible}
-        leftOpen={shell.leftOpen}
-        rightOpen={shell.rightOpen}
-        commandOpen={shell.commandOpen}
-        upgradeOpen={shell.upgradeOpen}
-        activeSymbol={shell.activeSymbol}
-        density={shell.density}
-        activePanel={shell.activePanel}
-        layoutPreset={shell.layoutPreset}
-        panelOrder={shell.panelOrder}
-        layoutSlots={shell.layoutSlots}
-        leftWidth={shell.leftWidth}
-        rightWidth={shell.rightWidth}
-        setLeftOpen={shell.setLeftOpen}
-        setRightOpen={shell.setRightOpen}
-        setCommandOpen={shell.setCommandOpen}
-        setUpgradeOpen={shell.setUpgradeOpen}
-        setActiveSymbol={shell.setActiveSymbol}
-        setDensity={shell.setDensity}
-        setActivePanel={shell.setActivePanel}
-        setLayoutPreset={shell.setLayoutPreset}
-        setPanelOrder={shell.setPanelOrder}
-        resetPanelOrder={shell.resetPanelOrder}
-        saveLayoutSlot={shell.saveLayoutSlot}
-        loadLayoutSlot={shell.loadLayoutSlot}
-        resetLayoutSlots={shell.resetLayoutSlots}
-        setLeftWidth={shell.setLeftWidth}
-        setRightWidth={shell.setRightWidth}
+    <div className="terminal-root">
+      <HeaderStrip onOpenCommand={() => setCommandOpen(true)} />
+      <CommandPalette 
+        isOpen={commandOpen} 
+        onClose={() => setCommandOpen(false)}
+        onSymbolSelect={setActiveSymbol}
+        onLayoutChange={setLayout}
       />
-    </ErrorBoundary>
+      
+      {layout === "research" && (
+        <div className="terminal-grid-research">
+          <WatchlistPanel 
+            onSelectSymbol={setActiveSymbol} 
+            activeSymbol={activeSymbol}
+          />
+          <ChartPanel symbol={activeSymbol} />
+          <SignalsPanel symbol={activeSymbol} />
+          <div className="terminal-bottom-bar">
+            <MacroCalendar />
+            <GeoNewsPanel />
+          </div>
+        </div>
+      )}
+
+      {layout === "screener" && <ScreenerPanel />}
+      {layout === "portfolio" && <PortfolioPanel />}
+    </div>
   )
 }

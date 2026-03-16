@@ -1,10 +1,13 @@
 import type { Metadata } from "next"
-import { IBM_Plex_Mono } from "next/font/google"
+import { IBM_Plex_Mono, JetBrains_Mono, Press_Start_2P } from "next/font/google"
 import { ClerkProvider } from "@clerk/nextjs"
 
 import "./globals.css"
+import "@/styles/terminal.css"
 
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" })
+const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" })
+const pressStart = Press_Start_2P({ weight: "400", subsets: ["latin"], variable: "--font-pixel" })
 
 export const metadata: Metadata = {
   title: "QuantOracle Command Center",
@@ -14,8 +17,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="en" className={mono.variable}>
-        <body className="font-[var(--font-mono)] antialiased">{children}</body>
+      <html lang="en" className={`${mono.variable} ${jetbrains.variable} ${pressStart.variable}`}>
+        <body className="font-mono antialiased">{children}</body>
       </html>
     </ClerkProvider>
   )

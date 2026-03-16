@@ -1,231 +1,114 @@
----
-title: QuantOracle
-emoji: "📈"
-colorFrom: "indigo"
-colorTo: "pink"
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # QuantOracle
 
-QuantOracle is a quantitative research and portfolio intelligence platform built with Streamlit.
-It combines data ingestion, feature engineering, model training, and an interactive web interface to help investors explore markets, construct portfolios, and analyze risk.
+The open-source quantitative research terminal for Indian equities.
 
-It uses a reproducible end-of-day (EOD) pipeline to automatically build feature snapshots and publish model artifacts so the UI loads quickly and deterministically.
+---
 
-**Live demo (Hugging Face Spaces):**
-- Space page: `https://huggingface.co/spaces/thinkingEverytime/QuantOracle`
-- App URL: `https://thinkingEverytime-quantoracle.hf.space/`
+## What it is
 
-[![CI](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/ci.yml)
-[![EOD Pipeline](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/eod_pipeline.yml)
-[![Intraday Quotes](https://github.com/rishigupta2004/QuantOracle/actions/workflows/intraday_quotes.yml/badge.svg)](https://github.com/rishigupta2004/QuantOracle/actions/workflows/intraday_quotes.yml)
-[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+QuantOracle is a Bloomberg-style research terminal for NSE-listed stocks. It combines a real EOD quant pipeline, IC-weighted signal generation, a factor model screener, and an AI-powered analysis layer — all free, all open source, all self-hostable.
 
-## Table of Contents
+---
 
-- [Overview](#overview)
-- [Why QuantOracle?](#why-quantoracle)
-- [Features](#features)
-- [Quantitative Models](#quantitative-models)
-- [Data Sources](#data-sources)
-- [Architecture](#architecture)
-- [Visuals](#visuals)
-- [Installation](#installation)
-- [Running the App](#running-the-app)
-- [Pipelines](#pipelines)
-- [Repository Structure](#repository-structure)
-- [Contributing & Testing](#contributing--testing)
-- [License](#license)
-- [Disclaimer](#disclaimer)
-- [Contact](#contact)
+## Why it exists
 
-## Overview
+Bloomberg covers Indian equities poorly for individual researchers. Quant tools for NSE are either expensive or closed source. QuantOracle is neither.
 
-QuantOracle is a multi-asset research tool focused on the Indian market. Its Streamlit interface lets you:
-- browse historical candlesticks,
-- track holdings,
-- analyze portfolio risk,
-- run ML-style signal generation.
+---
 
-Behind the scenes, it ingests market data, engineers robust features from OHLCV time series, trains lightweight models (ridge regression + optional gradient boosting), and publishes artifacts so the UI is fast and deterministic (no training in the UI).
+## Live stats (walk-forward validated, not backtested)
 
-## Why QuantOracle?
-
-- **India-first coverage**: focuses on NSE cash equities and ETFs.
-- **End-to-end pipeline**: ingest OHLCV → features → model → publish artifacts.
-- **Transparent models**: baselines + ridge regression are easy to reason about and extend.
-- **Modular & open source**: clear separation of UI, analytics, and pipeline scripts.
-
-## Features
-
-### Markets
-
-- Candlestick charts + technical indicators.
-- Symbol search across tracked NSE universe (and best-effort global tickers).
-- Live market status for NSE and US markets.
-
-### Portfolio
-
-- Enter holdings to view positions and profit/loss.
-- Simple rebalance suggestions based on predictions + portfolio constraints.
-- Caching to improve page load times.
-
-### Risk
-
-QuantOracle computes several risk metrics for a selected universe:
-
-| Metric | Description |
+| Metric | Value |
 |---|---|
-| Value at Risk | Estimated daily loss at 95/99% confidence using return distribution |
-| Max drawdown | Largest peak-to-trough decline over the selected lookback window |
-| Beta / Correlation | Sensitivity to a market proxy (defaults to `NIFTYBEES.NS`) |
+| Universe | Nifty50 (49 symbols validated) |
+| Signal IC (mean, walk-forward) | 0.174 |
+| IC Sharpe | null (1 validation step) |
+| Pipeline last run | 2026-03-16 |
+| Data source | Yahoo Finance (free) |
+| Deployment | Vercel (web) + GitHub Actions (pipeline) |
 
-## Quantitative Models
+---
 
-### Single-stock baselines (on-demand)
+## Quick start
 
-- **Moving Average crossover**: SMA20/SMA50 crossover signals
-- **Multi-factor technical score**: RSI + trend + volatility heuristics
-- **Mean reversion**: Bollinger Bands + RSI oversold/overbought logic
+```bash
+git clone https://github.com/rishigupta2004/QuantOracle
+cd QuantOracle/web
+cp .env.example .env.local    # Add your keys (only Supabase required)
+npm install && npm run dev
+```
 
-### EOD Market Screener (published)
+Open http://localhost:3000. Press / to search for a symbol.
 
-QuantOracle trains a ridge regression model on engineered features for cross-sectional ranking.
-Default horizon is **5 trading days**. Features include:
-- recent returns (1d/5d/20d),
-- 20-day volatility,
-- price deviations from SMA20/SMA50,
-- RSI14.
+Live at https://quant-oracle.vercel.app
 
-Predictions yield ranked long/short candidates plus a constraint-based long/short portfolio (gross/net exposure + max per-name weight caps).
+For the quant pipeline:
+```bash
+pip install -r requirements.txt
+python -m quant.pipeline --universe nifty50 --dry-run
+```
 
-## Data Sources
-
-- **India (NSE cash equities + ETFs)**: ingested via **Groww Trade API** in publisher workflows, uploaded as artifacts.
-- **Indices**: represented using tradable ETF proxies (e.g., `NIFTYBEES.NS`, `BANKBEES.NS`, `ITBEES.NS`).
-- **Global tickers / crypto**: best-effort via Yahoo Finance (UI convenience).
-- **News**: NewsData.io and IndianAPI, with RSS fallbacks (including Google News RSS).
+---
 
 ## Architecture
 
-Because Hugging Face Spaces provide only temporary storage, QuantOracle separates data processing from the UI:
+The pipeline (GitHub Actions) fetches EOD data, builds features, trains a ridge model, validates it with walk-forward IC, and publishes Parquet artifacts to Supabase. The Next.js UI reads those artifacts. No training happens in the UI. No stale model ships without a manifest warning.
 
-- **EOD pipeline (GitHub Actions, after close)**: fetches EOD candles (Groww), builds features, trains ridge model, uploads artifacts to Supabase Storage.
-- **Intraday quotes (GitHub Actions, during market hours)**: publishes `quotes.json` for fast dashboard tiles.
-- **UI (Hugging Face Spaces)**: downloads artifacts from Supabase (public bucket) and renders instantly (no training in the UI).
+---
 
-Diagram: `docs/images/architecture.svg`
+## Signal engine
 
-## Visuals
+Signals are IC-weighted across four non-overlapping categories: Trend (EMA crossover + ADX filter), Momentum (MACD), Mean Reversion (RSI with dynamic thresholds), and Volume (VWAP + OBV).
 
-Screenshots from the running app:
+The ADX filter suppresses trend signals in sideways markets — the single most common source of false signals in retail TA tools.
 
-![Dashboard](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/dashboard.png)
-![Markets Overview](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/markets_overview.png)
-![Markets Chart](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/markets_chart.png)
-![Risk](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/risk.png)
-![ML (Single Stock)](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/ml_single_stock.png)
-![ML (Screener)](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/ml_screener.png)
-![News](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/news.png)
-![Updates](https://raw.githubusercontent.com/rishigupta2004/QuantOracle/main/docs/images/screenshots/updates.png)
+IC is calculated per-symbol from 252 days of history. A signal with IC < 0.02 gets zero weight. We do not show signals we cannot validate.
 
-## Installation
+---
 
-### Prerequisites
+## Quant Lab
 
-- Python ≥ 3.12
-- pip
+The Lab lets you build and backtest your own factor models using free historical data. Start with the built-in factors (momentum, quality, low volatility, size) or define custom formulas. Walk-forward validation runs automatically before showing results.
 
-### Setup
+---
 
-```bash
-git clone https://github.com/rishigupta2004/QuantOracle.git
-cd QuantOracle
+## Roadmap
 
-python3 -m venv .venv
-source .venv/bin/activate
+- **v0.1** — Factor model construction + walk-forward backtest ✓
+- **v0.2** — Custom factor formula builder with live IC preview
+- **v0.3** — LSTM sequence model on OHLCV (optional GPU endpoint)
+- **v0.4** — Alternative data: NSE options OI, FII/DII bulk deals
+- **v0.5** — Paper trading: deploy model to live data, track P&L
+- **v0.6** — Genetic algorithm factor discovery
+- **v1.0** — Multi-model ensemble with live signal generation
 
-pip install -r requirements.txt
-# Optional (GBDT): pip install -r requirements-ml.txt
-```
+---
 
-### Environment variables (optional)
+## Contributing
 
-```bash
-# Groww API (publisher only)
-export GROWW_API_KEY="<your_groww_key>"
-export GROWW_API_SECRET="<your_groww_secret>"
+We want contributions. Specifically these:
 
-# News providers (optional)
-export NEWSDATA_API_KEY="<your_newsdata_key>"
-export INDIANAPI_API_KEY="<your_indianapi_key>"
+**Good first issues** (labeled `good-first-issue`):
+- Add a new NSE sector mapping for a missing symbol
+- Add a technical indicator to `quant/core.py`
+- Add a macro event to the calendar
+- Write a test for an untested function
 
-# Supabase for uploading artifacts (publisher only)
-export SUPABASE_URL="https://<project-ref>.supabase.co"
-export SUPABASE_BUCKET="<your_bucket>"
-export SUPABASE_SERVICE_ROLE_KEY="<your_service_role_key>"
-```
+**Research issues** (labeled `research`):
+- Implement Fama-French 3-factor model
+- Add NSE options open interest as a factor
+- Research 52-week high momentum factor for Indian equities
 
-## Running the App
+See CONTRIBUTING.md for setup instructions and code standards.
 
-```bash
-streamlit run streamlit_app.py
-```
-
-To point the app at locally-produced artifacts instead of pulling from Supabase, set:
-- `QUANTORACLE_DATA_DIR` to a directory containing `features.parquet`, `models/...`, and `ohlcv/...`
-- `QUANTORACLE_EOD_PREFIX` (default: `eod/nifty50`)
-
-## Pipelines
-
-### Intraday Quotes (publisher)
-
-Publishes `quotes.json` (used for fast dashboard prices):
-
-```bash
-python scripts/publish_quotes.py --universe-file data/universe/india_core.txt --prefix eod/nifty50 --provider groww --upload
-```
-
-### End-of-Day (EOD) Pipeline (publisher)
-
-Builds features + trains ridge + uploads artifacts (including per-symbol OHLCV parquet):
-
-```bash
-python scripts/publish_eod.py --universe-file data/universe/nifty50.txt \
-  --universe-name nifty50 --horizon 5 --alpha 10.0 --history-days 365 --provider groww --upload
-```
-
-## Repository Structure
-
-```text
-frontend/          Streamlit UI (app, views, services, theme)
-quant/             Core analytics, feature engineering, model helpers
-scripts/           Data ingestion, feature building, model training & publishing
-tests/             pytest suite
-streamlit_app.py   Hugging Face Spaces entrypoint
-data/universe/     Universe lists (tracked)
-docs/images/       Diagrams + screenshots
-```
-
-## Contributing & Testing
-
-```bash
-ruff check .
-pytest
-```
-
-## License
-
-This project is licensed under the MIT License. See `LICENSE`.
+---
 
 ## Disclaimer
 
-QuantOracle is a research and educational tool and does not constitute investment advice. Use at your own discretion.
+QuantOracle is a research tool. Nothing here is financial advice. The signal IC and backtest results are historical — they do not guarantee future performance. Use your own judgment.
 
-## Contact
+---
 
-For questions, support, or collaboration: `rishigupta.rg007@gmail.com`
+## License
+
+MIT. See LICENSE.

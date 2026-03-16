@@ -154,6 +154,49 @@ export function buildCommandIndex(args: BuildArgs): CommandAction[] {
       keywords: ["layout", "width", "reset", "drawers", "panel", "order", "slot"],
       run: args.resetLayout
     },
+    // New Phase 1 commands
+    {
+      id: "goto-screener",
+      label: "Go to Screener",
+      keywords: ["screener", "screen", "stocks", "filter"],
+      run: () => args.setActivePanel("quotes")
+    },
+    {
+      id: "goto-portfolio",
+      label: "Go to Portfolio",
+      keywords: ["portfolio", "holdings", "positions"],
+      run: () => args.setActivePanel("quotes")
+    },
+    {
+      id: "goto-lab",
+      label: "Go to Quant Lab",
+      keywords: ["lab", "model", "backtest", "research"],
+      run: () => args.setActivePanel("map")
+    },
+    {
+      id: "layout-1",
+      label: "Set layout Research",
+      keywords: ["layout", "research", "1"],
+      run: () => args.setLayoutPreset("atlas")
+    },
+    {
+      id: "layout-2",
+      label: "Set layout Screener",
+      keywords: ["layout", "screener", "2"],
+      run: () => args.setLayoutPreset("focus")
+    },
+    {
+      id: "layout-3",
+      label: "Set layout Portfolio",
+      keywords: ["layout", "portfolio", "3"],
+      run: () => args.setLayoutPreset("stack")
+    },
+    {
+      id: "layout-4",
+      label: "Set layout Quant Lab",
+      keywords: ["layout", "lab", "4"],
+      run: () => args.setLayoutPreset("atlas")
+    },
     {
       id: "focus-map",
       label: "Focus map panel",

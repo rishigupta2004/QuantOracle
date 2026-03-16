@@ -43,3 +43,4 @@ data/models/
 CV.md 
 CV.md/*
 .vercel
+.env*.local

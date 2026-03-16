@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """Generate an India-first universe file from built-in symbol maps."""
 
-# ruff: noqa: E402  (sys.path bootstrap must run before local imports)
-
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "frontend")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from services.market_data import ETF, STOCK
+from quant.data.universe import ETF, STOCK
 
 
 def main():
