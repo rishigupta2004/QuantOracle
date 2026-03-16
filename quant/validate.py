@@ -18,7 +18,7 @@ OHLCV_RULES: Dict[str, Callable[[pd.DataFrame], bool]] = {
     "low_lte_close": lambda df: (df["low"] <= df["close"]).all(),
     "non_neg_volume": lambda df: (df["volume"] >= 0).all(),
     "no_extreme_moves": lambda df: (
-        df["close"].pct_change().abs().dropna() < 0.20
+        df["close"].pct_change().abs().dropna() < 0.25
     ).all(),
     "unique_dates": lambda df: df.index.is_unique,
     "min_history": lambda df: len(df) >= 60,

@@ -355,8 +355,16 @@ def _train_and_validate(
     ic_arr = np.array(ic_values)
     mean_ic = float(np.mean(ic_arr))
     ic_std = float(np.std(ic_arr))
-    ic_sharpe = mean_ic / ic_std if ic_std > 0 else 0.0
+    ic_sharpe = mean_ic / ic_std if ic_std > 1e-9 else 0.0
     hit_rate = hits / total if total > 0 else 0.0
+
+    # Require at least 3 validation steps for reliable IC Sharpe
+    if len(ic_values) < 3:
+        logger.warning(
+            f"Only {len(ic_values)} validation steps - IC Sharpe may be unreliable"
+        )
+        ic_sharpe = 0.0
+
     passed = mean_ic > 0.03 and ic_sharpe > 0.5 and hit_rate > 0.5
 
     return WalkForwardResult(

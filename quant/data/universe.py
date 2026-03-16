@@ -45,7 +45,7 @@ NIFTY50_SYMBOLS = {
     "SBIN.NS": "SBI",
     "SUNPHARMA.NS": "Sun Pharma",
     "TATACONSUM.NS": "Tata Consumer",
-    "TATAMOTORS.NS": "Tata Motors",
+    # "TATAMOTORS.NS": "Tata Motors",  # yfinance symbol broken
     "TATASTEEL.NS": "Tata Steel",
     "TCS.NS": "TCS",
     "TECHM.NS": "Tech Mahindra",
