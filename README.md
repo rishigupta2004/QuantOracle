@@ -1,114 +1,161 @@
 # QuantOracle
 
-The open-source quantitative research terminal for Indian equities.
+> The open-source quantitative research terminal for Indian equities.
+
+![Demo](docs/images/demo.gif)
+
+**[Live Terminal →](https://quant-oracle.vercel.app)**  |  
+**[Quant Lab →](https://quant-oracle.vercel.app/lab)**  |  
+**[Pipeline Status](https://github.com/rishigupta2004/QuantOracle/actions)**
 
 ---
 
 ## What it is
 
-QuantOracle is a Bloomberg-style research terminal for NSE-listed stocks. It combines a real EOD quant pipeline, IC-weighted signal generation, a factor model screener, and an AI-powered analysis layer — all free, all open source, all self-hostable.
+QuantOracle is a Bloomberg-style research terminal built for 
+NSE-listed stocks — free, open source, and self-hostable.
+
+It combines:
+- **IC-weighted signal engine** — four non-correlated signal 
+  categories with ADX filtering and walk-forward validation
+- **Factor model screener** — cross-sectional ranking across 
+  Nifty50 using momentum, quality, low-vol, and size factors
+- **Quant Model Lab** — build and backtest your own factor 
+  models against historical NSE data
+- **Contextual AI analysis** — inline signal explanations 
+  grounded in live indicator values, not generic commentary
+- **Automated EOD pipeline** — validates, trains, and publishes 
+  model artifacts daily via GitHub Actions
+
+Zero paid dependencies. Every data source is free tier.
 
 ---
 
-## Why it exists
+## Why this exists
 
-Bloomberg covers Indian equities poorly for individual researchers. Quant tools for NSE are either expensive or closed source. QuantOracle is neither.
+Bloomberg covers Indian equities poorly for individual researchers.
+Quant tools for NSE are either expensive or closed source.
+QuantOracle is neither.
 
 ---
 
-## Live stats (walk-forward validated, not backtested)
+## Live metrics (walk-forward validated)
 
 | Metric | Value |
 |---|---|
-| Universe | Nifty50 (49 symbols validated) |
+| Universe | Nifty50 — 49 symbols validated |
 | Signal IC (mean, walk-forward) | 0.174 |
-| IC Sharpe | null (1 validation step) |
-| Pipeline last run | 2026-03-16 |
-| Data source | Yahoo Finance (free) |
-| Deployment | Vercel (web) + GitHub Actions (pipeline) |
+| IC threshold to publish | 0.03 (model held back if below) |
+| Pipeline cadence | Daily at 15:35 IST via GitHub Actions |
+| Primary data source | Yahoo Finance (free, no key required) |
+| Deployment | Vercel (web) + Supabase (artifacts) |
+
+*IC = Information Coefficient. Measures signal predictive power.
+0.174 on NSE walk-forward validation. Indian markets show stronger
+factor signals than US markets due to lower institutional efficiency.*
+
+---
+
+## Signal engine design
+
+Four non-overlapping signal categories. Never two signals 
+from the same category — that's double-counting, not confirmation.
+
+| Category | Indicator | Key design decision |
+|---|---|---|
+| Trend | EMA(21/55) + ADX | ADX < 20 → signal suppressed. No trend signals in sideways markets. |
+| Momentum | MACD histogram | ATR-normalized. Comparable across ₹100 and ₹5,000 stocks. |
+| Mean Reversion | RSI(14) | Dynamic thresholds. Each stock's own 252-day RSI distribution. |
+| Volume | VWAP + OBV | Confirmation modifier, not a primary signal. |
+
+Composite score is IC-weighted per symbol — signals that have 
+historically predicted returns for *that specific stock* get 
+more weight than signals that haven't.
+
+---
+
+## Quant Model Lab
+
+Build and walk-forward validate your own factor models.
+
+Available factors: 12-1M Momentum, Low Volatility, Quality (ROE), 
+Low Leverage, Size. Custom formula syntax supported.
+
+[→ Open the Lab](https://quant-oracle.vercel.app/lab)
+
+**Lab roadmap:**
+- v0.1 ✓ — Factor model construction + walk-forward backtest
+- v0.2 — Custom factor formula builder with live IC preview
+- v0.3 — LSTM sequence model on OHLCV
+- v0.4 — NSE options OI + FII/DII alternative data
+- v0.5 — Paper trading with live P&L tracking
+- v1.0 — Multi-model ensemble with live signal generation
 
 ---
 
 ## Quick start
-
 ```bash
+# Clone
 git clone https://github.com/rishigupta2004/QuantOracle
-cd QuantOracle/web
-cp .env.example .env.local    # Add your keys (only Supabase required)
+cd QuantOracle
+
+# Web terminal
+cd web
+cp .env.example .env.local   # Add Supabase URL + anon key
 npm install && npm run dev
-```
+# Open http://localhost:3000 — press / to search
 
-Open http://localhost:3000. Press / to search for a symbol.
-
-Live at https://quant-oracle.vercel.app
-
-For the quant pipeline:
-```bash
+# Quant pipeline (Python)
+cd ..
 pip install -r requirements.txt
+cp .env.example .env         # Add Supabase service role key
 python -m quant.pipeline --universe nifty50 --dry-run
 ```
 
----
-
-## Architecture
-
-The pipeline (GitHub Actions) fetches EOD data, builds features, trains a ridge model, validates it with walk-forward IC, and publishes Parquet artifacts to Supabase. The Next.js UI reads those artifacts. No training happens in the UI. No stale model ships without a manifest warning.
-
----
-
-## Signal engine
-
-Signals are IC-weighted across four non-overlapping categories: Trend (EMA crossover + ADX filter), Momentum (MACD), Mean Reversion (RSI with dynamic thresholds), and Volume (VWAP + OBV).
-
-The ADX filter suppresses trend signals in sideways markets — the single most common source of false signals in retail TA tools.
-
-IC is calculated per-symbol from 252 days of history. A signal with IC < 0.02 gets zero weight. We do not show signals we cannot validate.
+**Required env vars** (see `.env.example`):
+- `SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` — free Supabase project
+- `SUPABASE_SERVICE_ROLE_KEY` — pipeline uploads only
+- `ANTHROPIC_API_KEY` — optional, AI explanations gracefully disabled without it
+- `NEWSDATA_API_KEY` — optional, free tier at newsdata.io
 
 ---
 
-## Quant Lab
-
-The Lab lets you build and backtest your own factor models using free historical data. Start with the built-in factors (momentum, quality, low volatility, size) or define custom formulas. Walk-forward validation runs automatically before showing results.
-
----
-
-## Roadmap
-
-- **v0.1** — Factor model construction + walk-forward backtest ✓
-- **v0.2** — Custom factor formula builder with live IC preview
-- **v0.3** — LSTM sequence model on OHLCV (optional GPU endpoint)
-- **v0.4** — Alternative data: NSE options OI, FII/DII bulk deals
-- **v0.5** — Paper trading: deploy model to live data, track P&L
-- **v0.6** — Genetic algorithm factor discovery
-- **v1.0** — Multi-model ensemble with live signal generation
+## Architecture 
+[Architecture diagram →](docs/images/architecture.svg)
 
 ---
 
 ## Contributing
 
-We want contributions. Specifically these:
+We want contributions. Here's exactly where to start:
 
 **Good first issues** (labeled `good-first-issue`):
-- Add a new NSE sector mapping for a missing symbol
 - Add a technical indicator to `quant/core.py`
-- Add a macro event to the calendar
-- Write a test for an untested function
+- Add NSE sector mappings for Nifty100 symbols  
+- Add RBI MPC meeting dates to the macro calendar
+- Write unit tests for CVaR in `quant/risk.py`
 
 **Research issues** (labeled `research`):
 - Implement Fama-French 3-factor model
 - Add NSE options open interest as a factor
-- Research 52-week high momentum factor for Indian equities
+- Research 52-week high momentum factor for NSE
 
-See CONTRIBUTING.md for setup instructions and code standards.
+**Code standards in 4 lines:**
+Python functions max 40 lines. No paid APIs. Tests required 
+for all `quant/` functions. CSS variables only — no hardcoded hex.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup guide.
 
 ---
 
 ## Disclaimer
 
-QuantOracle is a research tool. Nothing here is financial advice. The signal IC and backtest results are historical — they do not guarantee future performance. Use your own judgment.
+Research tool only. Not financial advice. Signal IC and backtest 
+results are historical — past performance does not guarantee 
+future returns. Validate all signals independently before acting.
 
 ---
 
 ## License
 
-MIT. See LICENSE.
+[MIT](LICENSE) — Use it, fork it, build on it.
