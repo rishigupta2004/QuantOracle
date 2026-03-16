@@ -20,12 +20,12 @@ Bloomberg covers Indian equities poorly for individual researchers. Quant tools 
 
 | Metric | Value |
 |---|---|
-| Universe | Nifty50 (48 symbols) |
-|---|---|
-| Signal IC (mean, walk-forward) | 0.178 |
-| IC Sharpe | N/A (1 validation step) |
-| Pipeline runs | 2× daily via GitHub Actions |
+| Universe | Nifty50 (49 symbols validated) |
+| Signal IC (mean, walk-forward) | 0.174 |
+| IC Sharpe | null (1 validation step) |
+| Pipeline last run | 2026-03-16 |
 | Data source | Yahoo Finance (free) |
+| Deployment | Vercel (web) + GitHub Actions (pipeline) |
 
 ---
 
@@ -39,6 +39,8 @@ npm install && npm run dev
 ```
 
 Open http://localhost:3000. Press / to search for a symbol.
+
+Live at https://quant-oracle.vercel.app
 
 For the quant pipeline:
 ```bash

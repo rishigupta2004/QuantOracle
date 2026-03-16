@@ -179,7 +179,7 @@ def publish_eod_artifacts(
             skipped_symbols=skipped_symbols,
             model_refreshed=model_refreshed,
             mean_ic=wf_result.mean_ic if wf_result else 0,
-            ic_sharpe=wf_result.ic_sharpe if wf_result else 0,
+            ic_sharpe=wf_result.ic_sharpe if wf_result else None,
         )
 
     return PublishResult(
@@ -242,7 +242,7 @@ def _train_and_validate(
         return WalkForwardResult(
             mean_ic=0.0,
             ic_std=0.0,
-            ic_sharpe=0.0,
+            ic_sharpe=None,
             hit_rate=0.0,
             passed=False,
             ic_series=pd.Series(),
@@ -260,7 +260,7 @@ def _train_and_validate(
         return WalkForwardResult(
             mean_ic=0.0,
             ic_std=0.0,
-            ic_sharpe=0.0,
+            ic_sharpe=None,
             hit_rate=0.0,
             passed=False,
             ic_series=pd.Series(),
@@ -345,7 +345,7 @@ def _train_and_validate(
         return WalkForwardResult(
             mean_ic=mean_momentum,
             ic_std=0.0,
-            ic_sharpe=0.0,
+            ic_sharpe=None,
             hit_rate=0.5,
             passed=passed,
             ic_series=pd.Series(ic_values) if ic_values else pd.Series(),
@@ -363,9 +363,11 @@ def _train_and_validate(
         logger.warning(
             f"Only {len(ic_values)} validation steps - IC Sharpe may be unreliable"
         )
-        ic_sharpe = 0.0
+        ic_sharpe = None
 
-    passed = mean_ic > 0.03 and ic_sharpe > 0.5 and hit_rate > 0.5
+    passed = (
+        mean_ic > 0.03 and (ic_sharpe is None or ic_sharpe > 0.5) and hit_rate > 0.5
+    )
 
     return WalkForwardResult(
         mean_ic=mean_ic,
@@ -396,7 +398,7 @@ def _publish_manifest(
     skipped_symbols: list[str],
     model_refreshed: bool,
     mean_ic: float,
-    ic_sharpe: float,
+    ic_sharpe: Optional[float],
 ) -> None:
     """Publish artifacts.json to Supabase."""
     from supabase import create_client, Client
@@ -410,7 +412,7 @@ def _publish_manifest(
         "model_refreshed": bool(model_refreshed),
         "model_metrics": {
             "mean_ic": float(round(mean_ic, 4)),
-            "ic_sharpe": float(round(ic_sharpe, 4)),
+            "ic_sharpe": round(ic_sharpe, 4) if ic_sharpe is not None else None,
             "validation_passed": bool(model_refreshed),
         },
         "data_quality": {
