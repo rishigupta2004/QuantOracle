@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useUser } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
+import { getMarketStatuses } from "@/lib/market-hours"
 
 type Props = {
   onOpenCommand: () => void
@@ -35,10 +36,18 @@ export function HeaderStrip({ onOpenCommand }: Props) {
         <span className="wm-brand">QUANTORACLE</span>
         <span className="wm-sep">|</span>
         <span className="wm-mono">IST {clock.ist}</span>
-        <span className="wm-indicator ok">
-          <span className="status-live" style={{ display: 'inline-block', width: '6px', height: '6px', marginRight: '4px' }} />
-          NSE LIVE
-        </span>
+        {getMarketStatuses().map(m => (
+          <span key={m.name} style={{
+            fontFamily: 'var(--font-pixel)',
+            fontSize: '7px',
+            padding: '2px 6px',
+            marginRight: '4px',
+            color: m.color,
+            boxShadow: `1px 0 0 ${m.color}, -1px 0 0 ${m.color}, 0 1px 0 ${m.color}, 0 -1px 0 ${m.color}`,
+          }}>
+            {m.name} {m.status}
+          </span>
+        ))}
         <div className="search-bar" onClick={onOpenCommand}>
           <span className="search-bar-icon">⌘</span>
           <span className="search-bar-text">Search symbol or command...</span>

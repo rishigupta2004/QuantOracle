@@ -40,17 +40,9 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
   
   const timestamps = result.timestamp || []
   const quote = result.indicators?.quote?.[0] || {}
-  const indicators = result.indicators?.indicator?.[0] || {}
   
   const data: { time: string; open: number; high: number; low: number; close: number }[] = []
   const volume: { time: string; value: number; color: string }[] = []
-  
-  const closes = quote.close || []
-  const ema21 = calculateEMA(closes.filter(Boolean) as number[], 21)
-  const ema55 = calculateEMA(closes.filter(Boolean) as number[], 55)
-  
-  let ema21Idx = 0
-  let ema55Idx = 0
   
   for (let i = 0; i < timestamps.length; i++) {
     const time = new Date(timestamps[i] * 1000).toISOString().split("T")[0]
@@ -71,18 +63,41 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
     volume.push({ time, value: vol || 0, color: volColor })
   }
   
-  const closesFiltered = data.map(d => d.close)
+  const closesFromData = data.map(d => d.close)
+  const rsiValues = calculateRSI(closesFromData)
+  const { macd, signal: macdSignal, histogram } = calculateMACDArrays(closesFromData)
+  const { oversold: rsiOversold, overbought: rsiOverbought } = calculateDynamicThresholds(rsiValues)
+  
+  const volumes = quote.volume || []
+  const avgVolume20d = volumes.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20
+  
+  const ema21 = calculateEMA(closesFromData, 21)
+  const ema55 = calculateEMA(closesFromData, 55)
+  
   const ema21Data = data.map((_, i) => ({
     time: data[i].time,
-    value: ema21[i] || closesFiltered[i] || 0,
+    value: ema21[i] || closesFromData[i] || 0,
   }))
   
   const ema55Data = data.map((_, i) => ({
     time: data[i].time,
-    value: ema55[i] || closesFiltered[i] || 0,
+    value: ema55[i] || closesFromData[i] || 0,
   }))
   
-  return { data, ema21: ema21Data, ema55: ema55Data, volume }
+  return { 
+    symbol,
+    candles: data, 
+    ema21: ema21Data, 
+    ema55: ema55Data,
+    rsi: rsiValues.map((v, i) => ({ time: data[i].time, value: v })),
+    rsi_oversold: rsiOversold,
+    rsi_overbought: rsiOverbought,
+    macd: macd.map((v, i) => ({ time: data[i].time, value: v })),
+    macd_signal: macdSignal.map((v, i) => ({ time: data[i].time, value: v })),
+    macd_histogram: histogram.map((v, i) => ({ time: data[i].time, value: v })),
+    volume: volume,
+    avg_volume_20d: avgVolume20d
+  }
 }
 
 function calculateEMA(values: number[], period: number): number[] {
@@ -109,6 +124,72 @@ function calculateEMA(values: number[], period: number): number[] {
   }
   
   return ema
+}
+
+function calculateRSI(values: number[], period: number = 14): number[] {
+  if (values.length < period + 1) return []
+  
+  const rsiValues: number[] = []
+  
+  for (let i = 0; i < values.length; i++) {
+    if (i < period) {
+      rsiValues.push(50)
+      continue
+    }
+    
+    let gains = 0
+    let losses = 0
+    
+    for (let j = i - period + 1; j <= i; j++) {
+      const change = values[j] - values[j - 1]
+      if (change > 0) gains += change
+      else losses -= change
+    }
+    
+    const avgGain = gains / period
+    const avgLoss = losses / period
+    
+    if (avgLoss === 0) {
+      rsiValues.push(100)
+    } else {
+      const rs = avgGain / avgLoss
+      rsiValues.push(100 - (100 / (1 + rs)))
+    }
+  }
+  
+  return rsiValues
+}
+
+function calculateMACDArrays(values: number[]) {
+  const ema12 = calculateEMA(values, 12)
+  const ema26 = calculateEMA(values, 26)
+  const macdLine: number[] = []
+  const signalLine: number[] = []
+  const histogram: number[] = []
+  
+  for (let i = 0; i < values.length; i++) {
+    const macd = (ema12[i] || 0) - (ema26[i] || 0)
+    macdLine.push(macd)
+  }
+  
+  const signalEma = calculateEMA(macdLine.filter((_, i) => i >= macdLine.length - 9), 9)
+  for (let i = 0; i < macdLine.length; i++) {
+    if (i < macdLine.length - 9) {
+      signalLine.push(0)
+    } else {
+      signalLine.push(signalEma[i - (macdLine.length - 9)] || 0)
+    }
+    histogram.push(macdLine[i] - signalLine[i])
+  }
+  
+  return { macd: macdLine, signal: signalLine, histogram }
+}
+
+function calculateDynamicThresholds(rsiValues: number[]): { oversold: number; overbought: number } {
+  const sorted = [...rsiValues].sort((a, b) => a - b)
+  const p10 = sorted[Math.floor(sorted.length * 0.1)] || 30
+  const p90 = sorted[Math.floor(sorted.length * 0.9)] || 70
+  return { oversold: Math.round(p10 * 10) / 10, overbought: Math.round(p90 * 10) / 10 }
 }
 
 export async function GET(

@@ -42,8 +42,45 @@ async function fetchFromYahoo(symbol: string) {
   return { closes, volumes, highs, lows, timestamps }
 }
 
+async function getFundamentals(symbol: string) {
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile`
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      next: { revalidate: 3600 }
+    })
+    const json = await res.json()
+    const s = json?.quoteSummary?.result?.[0]
+    if (!s) return null
+    
+    const sd = s.summaryDetail || {}
+    const ks = s.defaultKeyStatistics || {}
+    const fd = s.financialData || {}
+    const ap = s.assetProfile || {}
+    
+    return {
+      pe_ratio: sd?.trailingPE?.raw ?? null,
+      pb_ratio: ks?.priceToBook?.raw ?? null,
+      roe: fd?.returnOnEquity?.raw ? (fd.returnOnEquity.raw * 100).toFixed(1) + '%' : null,
+      debt_to_equity: fd?.debtToEquity?.raw ?? null,
+      market_cap: sd?.marketCap?.raw ?? null,
+      market_cap_fmt: sd?.marketCap?.fmt ?? null,
+      revenue: fd?.totalRevenue?.fmt ?? null,
+      profit_margin: fd?.profitMargins?.raw ? (fd.profitMargins.raw * 100).toFixed(1) + '%' : null,
+      week_52_high: sd?.fiftyTwoWeekHigh?.raw ?? null,
+      week_52_low: sd?.fiftyTwoWeekLow?.raw ?? null,
+      avg_volume: sd?.averageVolume?.fmt ?? null,
+      dividend_yield: sd?.dividendYield?.raw ? (sd.dividendYield.raw * 100).toFixed(2) + '%' : null,
+      sector: ap?.sector ?? null,
+      industry: ap?.industry ?? null,
+      description: ap?.longBusinessSummary?.slice(0, 200) ?? null,
+    }
+  } catch { return null }
+}
+
 async function calculateSignal(symbol: string) {
   const { closes, volumes, highs, lows } = await fetchFromYahoo(symbol)
+  const fundamentals = await getFundamentals(symbol).catch(() => null)
   
   const currentPrice = closes[closes.length - 1]
   const prevPrice = closes[closes.length - 2]
@@ -114,10 +151,11 @@ async function calculateSignal(symbol: string) {
     atr: Math.round(atr * 100) / 100,
     adx: Math.round(adx * 10) / 10,
     vwap: Math.round(vwap * 100) / 100,
-    pe: 0,
-    pb: 0,
-    roe: 0,
-    mkt_cap: 0,
+    fundamentals,
+    pe: fundamentals?.pe_ratio ?? 0,
+    pb: fundamentals?.pb_ratio ?? 0,
+    roe: fundamentals?.roe ? parseFloat(fundamentals.roe) : 0,
+    mkt_cap: fundamentals?.market_cap ?? 0,
     factor_decile: Math.min(10, Math.max(1, Math.round(5 + score * 5))),
     top_factor: score > 0.3 ? "Momentum" : score < -0.3 ? "Reverse Momentum" : "Mean Reversion",
   }

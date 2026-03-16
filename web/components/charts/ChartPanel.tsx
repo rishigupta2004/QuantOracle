@@ -35,9 +35,14 @@ type SignalData = {
 export function ChartPanel({ symbol }: { symbol: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
+  const indicatorChartRef = useRef<any>(null)
   const candlestickSeriesRef = useRef<any>(null)
   const ema21SeriesRef = useRef<any>(null)
   const ema55SeriesRef = useRef<any>(null)
+  const rsiSeriesRef = useRef<any>(null)
+  const macdSeriesRef = useRef<any>(null)
+  const macdSignalSeriesRef = useRef<any>(null)
+  const macdHistogramSeriesRef = useRef<any>(null)
   const volumeSeriesRef = useRef<any>(null)
   
   const [signal, setSignal] = useState<SignalData | null>(null)
@@ -101,28 +106,106 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       priceLineVisible: false,
     })
 
-    const volumeSeries = chart.addSeries(HistogramSeries, {
-      color: "#26a69a",
-      priceFormat: { type: "volume" },
-      priceScaleId: "",
-    })
-
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.85, bottom: 0 },
-    })
-
     chartRef.current = chart
     candlestickSeriesRef.current = candlestickSeries
     ema21SeriesRef.current = ema21Series
     ema55SeriesRef.current = ema55Series
+
+    const indicatorChart = createChart(containerRef.current, {
+      layout: {
+        background: { color: "#0f0f0f" },
+        textColor: "#8a8a8a",
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { visible: false },
+      },
+      crosshair: {
+        vertLine: {
+          color: "#c8ff00",
+          width: 1,
+          style: 2,
+          labelBackgroundColor: "#c8ff00",
+        },
+        horzLine: {
+          color: "#c8ff00",
+          width: 1,
+          style: 2,
+          labelBackgroundColor: "#c8ff00",
+        },
+      },
+      rightPriceScale: {
+        borderColor: "#1a1a1a",
+      },
+      timeScale: {
+        borderColor: "#1a1a1a",
+        timeVisible: true,
+      },
+    })
+
+    const rsiSeries = indicatorChart.addSeries(LineSeries, {
+      color: "#9966ff",
+      lineWidth: 1,
+      priceLineVisible: false,
+    })
+
+    const macdSeries = indicatorChart.addSeries(LineSeries, {
+      color: "#00ccff",
+      lineWidth: 1,
+      priceLineVisible: false,
+    })
+
+    const macdSignalSeries = indicatorChart.addSeries(LineSeries, {
+      color: "#ff9900",
+      lineWidth: 1,
+      priceLineVisible: false,
+    })
+
+    const macdHistogramSeries = indicatorChart.addSeries(HistogramSeries, {
+      color: "#26a69a",
+      priceFormat: { type: "volume" },
+      priceScaleId: "macd",
+    })
+
+    const volumeSeries = indicatorChart.addSeries(HistogramSeries, {
+      color: "#26a69a",
+      priceFormat: { type: "volume" },
+      priceScaleId: "volume",
+    })
+
+    rsiSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.05, bottom: 0.68 },
+    })
+
+    macdHistogramSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.73, bottom: 0.45 },
+    })
+
+    macdSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.73, bottom: 0.45 },
+    })
+
+    macdSignalSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.73, bottom: 0.45 },
+    })
+
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.95, bottom: 0 },
+    })
+
+    indicatorChartRef.current = indicatorChart
+    rsiSeriesRef.current = rsiSeries
+    macdSeriesRef.current = macdSeries
+    macdSignalSeriesRef.current = macdSignalSeries
+    macdHistogramSeriesRef.current = macdHistogramSeries
     volumeSeriesRef.current = volumeSeries
 
     const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        })
+      if (containerRef.current && chartRef.current && indicatorChartRef.current) {
+        const height = containerRef.current.clientHeight
+        const width = containerRef.current.clientWidth
+        chartRef.current.applyOptions({ width, height: height * 0.55 })
+        indicatorChartRef.current.applyOptions({ width, height: height * 0.45 })
       }
     }
 
@@ -132,10 +215,13 @@ export function ChartPanel({ symbol }: { symbol: string }) {
     return () => {
       window.removeEventListener("resize", handleResize)
       chart.remove()
+      indicatorChart.remove()
     }
   }, [])
 
   useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current) return
+
     const fetchData = async () => {
       setLoading(true)
       try {
@@ -147,25 +233,45 @@ export function ChartPanel({ symbol }: { symbol: string }) {
         const chartData = await chartRes.json()
         const signalData = await signalRes.json()
 
-        const chartDataArray = chartData.data || chartData
-        if (chartDataArray && chartDataArray.length > 0) {
-          const candleData: CandlestickData<Time>[] = chartDataArray.map((d: ChartData) => ({
+        const candles = chartData.candles || chartData.data || chartData
+
+        if (candles && candles.length > 0) {
+          const candleData: CandlestickData<Time>[] = candles.map((d: ChartData) => ({
             time: d.time as Time,
             open: d.open,
             high: d.high,
             low: d.low,
             close: d.close,
           }))
-
-          const ema21Data: { time: Time; value: number }[] = chartData.ema21 || []
-          const ema55Data: { time: Time; value: number }[] = chartData.ema55 || []
-          const volumeData: HistogramData<Time>[] = chartData.volume || []
-
           candlestickSeriesRef.current?.setData(candleData)
+
+          const ema21Data = chartData.ema21 || []
+          const ema55Data = chartData.ema55 || []
           ema21SeriesRef.current?.setData(ema21Data)
           ema55SeriesRef.current?.setData(ema55Data)
+
+          const rsiData = chartData.rsi || []
+          rsiSeriesRef.current?.setData(rsiData)
+
+          const rsiOversold = chartData.rsi_oversold || 30
+          const rsiOverbought = chartData.rsi_overbought || 70
+
+          const macdData = chartData.macd || []
+          const macdSignalData = chartData.macd_signal || []
+          const macdHistogramData = chartData.macd_histogram || []
+          macdSeriesRef.current?.setData(macdData)
+          macdSignalSeriesRef.current?.setData(macdSignalData)
+          macdHistogramSeriesRef.current?.setData(macdHistogramData)
+
+          const volumeData: HistogramData<Time>[] = (chartData.volume || []).map((d: any) => ({
+            time: d.time as Time,
+            value: d.value,
+            color: d.color,
+          }))
           volumeSeriesRef.current?.setData(volumeData)
+
           chartRef.current?.timeScale().fitContent()
+          indicatorChartRef.current?.timeScale().fitContent()
         }
 
         if (signalData.signal) {

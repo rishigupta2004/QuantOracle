@@ -4,17 +4,19 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const MARKET_KEYWORDS = [
-  "oil", "sanctions", "Fed", "RBI", "tariff", "war", "crude", "rupee", "FII", "DII", "Nifty",
-  "inflation", "rate", "hike", "cut", "GDP", "IPO", "broker", "upgrade", "downgrade",
-  "quarterly", "earnings", "profit", "loss", "revenue", "market", "sensex", "trade",
-  "import", "export", "dollar", "usd", "global", "geopolitical"
+  'nifty', 'sensex', 'nse', 'bse', 'rbi', 'sebi',
+  'rupee', 'fii', 'dii', 'oil', 'crude', 'fed',
+  'rate', 'inflation', 'gdp', 'sanctions', 'tariff',
+  'war', 'market', 'stock', 'equity', 'bond',
+  'reliance', 'tcs', 'hdfc', 'infosys', 'ipo',
+  'bank', 'finance', 'it', 'tech', 'pharma', 'metal'
 ]
 
 const HIGH_RISK_KEYWORDS = ["war", "sanctions", "rate hike", "crash", "default", "recession", "conflict"]
 const MEDIUM_RISK_KEYWORDS = ["inflation", "tariff", "election", "policy", "Fed", "RBI", "meeting"]
 
 const newsCache = { news: [], expires: 0 }
-const CACHE_TTL_MS = 30 * 60 * 1000
+const CACHE_TTL_MS = 15 * 60 * 1000 // 15 minutes
 
 function getRiskLevel(text: string): "high" | "medium" | "low" {
   const lower = text.toLowerCase()
@@ -49,33 +51,25 @@ function getTags(text: string): string[] {
   return tags.length > 0 ? tags : ["GENERAL"]
 }
 
-function calculateRelevance(text: string): number {
+function isRelevant(text: string): boolean {
   const lower = text.toLowerCase()
-  let score = 0
-  
-  for (const keyword of MARKET_KEYWORDS) {
-    if (lower.includes(keyword)) {
-      score += 1
-    }
-  }
-  
-  return score
+  return MARKET_KEYWORDS.some(kw => lower.includes(kw))
 }
 
-async function fetchFromNewsData(query: string) {
-  const apiKey = process.env.NEWS_DATA_API_KEY
+async function fetchFromNewsData() {
+  // Try both env var names
+  const apiKey = process.env.NEWSDATA_API_KEY || process.env.NEWS_DATA_API_KEY
   
   if (!apiKey) {
-    throw new Error("NEWS_DATA_API_KEY not configured")
+    throw new Error("NEWSDATA_API_KEY not configured")
   }
   
   const url = new URL("https://newsdata.io/api/1/news")
   url.searchParams.set("apikey", apiKey)
-  url.searchParams.set("q", query)
-  url.searchParams.set("category", "business,politics")
-  url.searchParams.set("country", "in,us")
   url.searchParams.set("language", "en")
-  url.searchParams.set("size", "20")
+  url.searchParams.set("category", "business,politics")
+  url.searchParams.set("q", "NSE OR Nifty OR RBI OR oil OR sanctions OR trade OR rupee")
+  url.searchParams.set("size", "10")
   
   const res = await fetch(url.toString())
   
@@ -92,14 +86,25 @@ export async function GET() {
   }
   
   try {
-    const data = await fetchFromNewsData("India stock market OR NSE OR RBI OR oil prices OR Fed OR sanctions")
+    const data = await fetchFromNewsData()
     
-    const news = (data.results || [])
-      .map((item: { title: string; source_id?: string; pubDate?: string; description?: string }) => {
+    let articles = data.results || []
+    
+    // First pass: filter for relevant articles
+    const relevantArticles = articles.filter((item: any) => {
+      const text = `${item.title} ${item.description || ""}`
+      return isRelevant(text)
+    })
+    
+    // If no relevant articles, use all articles
+    if (relevantArticles.length === 0) {
+      relevantArticles.push(...articles.slice(0, 5))
+    }
+    
+    const news = relevantArticles
+      .slice(0, 10)
+      .map((item: any) => {
         const text = `${item.title} ${item.description || ""}`
-        const relevance = calculateRelevance(text)
-        
-        if (relevance === 0) return null
         
         return {
           title: item.title,
@@ -107,12 +112,8 @@ export async function GET() {
           pubDate: item.pubDate || new Date().toISOString(),
           tags: getTags(text),
           risk: getRiskLevel(text),
-          relevance,
         }
       })
-      .filter(Boolean)
-      .sort((a: { relevance: number }, b: { relevance: number }) => b.relevance - a.relevance)
-      .slice(0, 10)
     
     newsCache.news = news
     newsCache.expires = Date.now() + CACHE_TTL_MS
@@ -121,9 +122,12 @@ export async function GET() {
   } catch (err) {
     console.error("Geo news API error:", err)
     
+    // Return empty news with error message for debugging
     return NextResponse.json({ 
       news: [],
-      error: err instanceof Error ? err.message : "Failed to fetch news" 
+      error: process.env.NEWSDATA_API_KEY || process.env.NEWS_DATA_API_KEY 
+        ? (err instanceof Error ? err.message : "Failed to fetch news")
+        : "NEWSDATA_API_KEY not configured - add to Vercel env vars"
     })
   }
 }
