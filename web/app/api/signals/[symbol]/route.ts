@@ -5,19 +5,45 @@ export const dynamic = "force-dynamic"
 
 const signalsCache = new Map<string, { signal: unknown; expires: number }>()
 
-async function calculateSignal(symbol: string) {
-  const yfinance = await import("yfinance")
-  const ticker = yfinance.default(symbol)
-  const hist = await ticker.history("3mo")
+async function fetchFromYahoo(symbol: string) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=3mo`
   
-  if (!hist || !hist.Date || hist.Date.values.length === 0) {
-    throw new Error("No data returned")
+  const res = await fetch(url, {
+    headers: { 
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      'Accept': 'application/json',
+    },
+    next: { revalidate: 300 }
+  })
+  
+  if (!res.ok) {
+    throw new Error(`Yahoo API returned ${res.status}`)
   }
+  
+  const json = await res.json()
+  const result = json?.chart?.result?.[0]
+  
+  if (!result) {
+    throw new Error("No data returned from Yahoo")
+  }
+  
+  const timestamps = result.timestamp || []
+  const quote = result.indicators?.quote?.[0] || {}
+  
+  const closes = quote.close?.filter((v: number) => v !== null && v !== undefined) || []
+  const volumes = quote.volume?.filter((v: number) => v !== null && v !== undefined) || []
+  const highs = quote.high?.filter((v: number) => v !== null && v !== undefined) || []
+  const lows = quote.low?.filter((v: number) => v !== null && v !== undefined) || []
+  
+  if (closes.length === 0) {
+    throw new Error("No price data available")
+  }
+  
+  return { closes, volumes, highs, lows, timestamps }
+}
 
-  const closes = hist.Close.values as number[]
-  const volumes = hist.Volume.values as number[]
-  const highs = hist.High.values as number[]
-  const lows = hist.Low.values as number[]
+async function calculateSignal(symbol: string) {
+  const { closes, volumes, highs, lows } = await fetchFromYahoo(symbol)
   
   const currentPrice = closes[closes.length - 1]
   const prevPrice = closes[closes.length - 2]
@@ -47,7 +73,7 @@ async function calculateSignal(symbol: string) {
     momentum = "OVERSOLD"
   }
   
-  const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
+  const avgVolume = volumes.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20
   const lastVolume = volumes[volumes.length - 1]
   let volume = "NORMAL"
   if (lastVolume > avgVolume * 1.5) {
@@ -75,8 +101,6 @@ async function calculateSignal(symbol: string) {
   
   const confidence = Math.min(95, Math.max(40, 50 + Math.abs(score) * 50))
   
-  const fundamentals = await getFundamentals(symbol).catch(() => null)
-  
   return {
     verdict,
     score,
@@ -90,35 +114,20 @@ async function calculateSignal(symbol: string) {
     atr: Math.round(atr * 100) / 100,
     adx: Math.round(adx * 10) / 10,
     vwap: Math.round(vwap * 100) / 100,
-    pe: fundamentals?.pe || 0,
-    pb: fundamentals?.pb || 0,
-    roe: fundamentals?.roe || 0,
-    mkt_cap: fundamentals?.mkt_cap || 0,
+    pe: 0,
+    pb: 0,
+    roe: 0,
+    mkt_cap: 0,
     factor_decile: Math.min(10, Math.max(1, Math.round(5 + score * 5))),
     top_factor: score > 0.3 ? "Momentum" : score < -0.3 ? "Reverse Momentum" : "Mean Reversion",
   }
 }
 
-async function getFundamentals(symbol: string) {
-  try {
-    const yfinance = await import("yfinance")
-    const ticker = yfinance.default(symbol)
-    const info = await ticker.info
-    
-    return {
-      pe: info.trailingPE || 0,
-      pb: info.priceToBook || 0,
-      roe: info.returnOnEquity ? info.returnOnEquity * 100 : 0,
-      mkt_cap: info.marketCap || 0,
-    }
-  } catch {
-    return null
-  }
-}
-
 function ema(values: number[], period: number): number {
+  if (values.length < period) return values[values.length - 1] || 0
+  
   const k = 2 / (period + 1)
-  let emaVal = values.slice(0, period).reduce((a, b) => a + b, 0) / period
+  let emaVal = values.slice(0, period).reduce((a: number, b: number) => a + b, 0) / period
   
   for (let i = period; i < values.length; i++) {
     emaVal = values[i] * k + emaVal * (1 - k)
@@ -153,14 +162,17 @@ function calculateMACD(values: number[], fast: number = 12, slow: number = 26, s
   const slowEMA = ema(values, slow)
   const macdLine = fastEMA - slowEMA
   
+  // Calculate signal line
   const macdValues: number[] = []
-  for (let i = values.length - signal; i < values.length; i++) {
+  for (let i = Math.max(0, values.length - signal); i < values.length; i++) {
     const f = ema(values.slice(0, i + 1), fast)
     const s = ema(values.slice(0, i + 1), slow)
     macdValues.push(f - s)
   }
   
-  const signalLine = macdValues.reduce((a, b) => a + b, 0) / signal
+  const signalLine = macdValues.length > 0 
+    ? macdValues.reduce((a: number, b: number) => a + b, 0) / macdValues.length 
+    : 0
   const histogram = macdLine - signalLine
   
   return { macd: macdLine, signal: signalLine, histogram }
@@ -179,7 +191,7 @@ function calculateATR(highs: number[], lows: number[], closes: number[], period:
     trs.push(tr)
   }
   
-  return trs.slice(-period).reduce((a, b) => a + b, 0) / period
+  return trs.slice(-period).reduce((a: number, b: number) => a + b, 0) / period
 }
 
 function calculateADX(highs: number[], lows: number[], closes: number[], period: number = 14): number {
@@ -203,9 +215,11 @@ function calculateADX(highs: number[], lows: number[], closes: number[], period:
     ))
   }
   
-  const atr = tr.slice(-period).reduce((a, b) => a + b, 0) / period
-  const plusDI = (plusDM.slice(-period).reduce((a, b) => a + b, 0) / period / atr) * 100
-  const minusDI = (minusDM.slice(-period).reduce((a, b) => a + b, 0) / period / atr) * 100
+  const atr = tr.slice(-period).reduce((a: number, b: number) => a + b, 0) / period
+  if (atr === 0) return 0
+  
+  const plusDI = (plusDM.slice(-period).reduce((a: number, b: number) => a + b, 0) / period / atr) * 100
+  const minusDI = (minusDM.slice(-period).reduce((a: number, b: number) => a + b, 0) / period / atr) * 100
   
   const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100
   return dx
@@ -215,10 +229,10 @@ function calculateVWAP(highs: number[], lows: number[], closes: number[], volume
   const typicalPrices = highs.map((h, i) => (h + lows[i] + closes[i]) / 3)
   const typicalVolumes = typicalPrices.map((p, i) => p * volumes[i])
   
-  const totalTypicalVolume = typicalVolumes.slice(-20).reduce((a, b) => a + b, 0)
-  const totalVolume = volumes.slice(-20).reduce((a, b) => a + b, 0)
+  const totalTypicalVolume = typicalVolumes.slice(-20).reduce((a: number, b: number) => a + b, 0)
+  const totalVolume = volumes.slice(-20).reduce((a: number, b: number) => a + b, 0)
   
-  return totalTypicalVolume / totalVolume
+  return totalVolume > 0 ? totalTypicalVolume / totalVolume : 0
 }
 
 export async function GET(

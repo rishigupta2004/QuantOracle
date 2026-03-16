@@ -1,50 +1,72 @@
 "use client"
-
-import { useUser } from "@clerk/nextjs"
+import { useState, useEffect } from "react"
 
 export function ScreenerPanel() {
-  const { user, isLoaded } = useUser()
+  const [data, setData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/screener')
+      .then(r => r.json())
+      .then(d => { setData(d.rankings ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
 
   return (
-    <div className="screener-panel terminal-panel" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-      <div className="screener-title">STOCK SCREENER</div>
-      <p style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center", maxWidth: "400px" }}>
-        Filter stocks by P/E, P/B, ROE, momentum, and custom factor combinations.
-      </p>
-      {!isLoaded ? (
-        <div style={{ marginTop: "20px" }}><span className="pixel-loader" /></div>
-      ) : user ? (
-        <a 
-          href="/screener"
-          style={{ 
-            marginTop: "20px", 
-            padding: "12px 24px", 
-            background: "var(--text-accent)", 
-            color: "var(--bg-void)", 
-            fontFamily: "var(--font-pixel)", 
-            fontSize: "10px",
-            textDecoration: "none"
-          }}
-        >
-          OPEN SCREENER
-        </a>
-      ) : (
-        <a 
-          href="/sign-in"
-          style={{ 
-            marginTop: "20px", 
-            padding: "12px 24px", 
-            background: "transparent", 
-            border: "1px solid var(--border-mid)", 
-            color: "var(--text-secondary)", 
-            fontFamily: "var(--font-mono)", 
-            fontSize: "12px",
-            textDecoration: "none"
-          }}
-        >
-          Sign in to access screener
-        </a>
-      )}
+    <div style={{padding: '16px', fontFamily: 'var(--font-mono)'}}>
+      <div style={{
+        fontSize: '8px', 
+        fontFamily: 'var(--font-pixel)',
+        color: 'var(--text-accent)',
+        marginBottom: '16px'
+      }}>
+        FACTOR SCREENER — NIFTY50
+      </div>
+      {loading && <div style={{color: 'var(--text-secondary)'}}>Loading...</div>}
+      <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '11px'}}>
+        <thead>
+          <tr style={{color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-dim)'}}>
+            <th style={{textAlign:'left', padding:'4px 8px'}}>RANK</th>
+            <th style={{textAlign:'left', padding:'4px 8px'}}>SYMBOL</th>
+            <th style={{textAlign:'right', padding:'4px 8px'}}>SCORE</th>
+            <th style={{textAlign:'right', padding:'4px 8px'}}>DECILE</th>
+            <th style={{textAlign:'right', padding:'4px 8px'}}>MOMENTUM</th>
+            <th style={{textAlign:'right', padding:'4px 8px'}}>SIGNAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={row.symbol} style={{
+              borderBottom: '1px solid var(--border-dim)',
+              color: 'var(--text-primary)'
+            }}>
+              <td style={{padding:'4px 8px', color:'var(--text-secondary)'}}>{i+1}</td>
+              <td style={{padding:'4px 8px', fontWeight:'500'}}>{row.symbol?.replace('.NS','')}</td>
+              <td style={{padding:'4px 8px', textAlign:'right'}}>{row.composite_score?.toFixed(3) ?? '—'}</td>
+              <td style={{padding:'4px 8px', textAlign:'right'}}>{row.decile ?? '—'}/10</td>
+              <td style={{padding:'4px 8px', textAlign:'right'}}>{row.momentum_score?.toFixed(3) ?? '—'}</td>
+              <td style={{padding:'4px 8px', textAlign:'right'}}>
+                <span style={{
+                  fontFamily: 'var(--font-pixel)',
+                  fontSize: '7px',
+                  padding: '2px 6px',
+                  color: row.signal === 'BUY' ? 'var(--signal-buy)' : 
+                         row.signal === 'SELL' ? 'var(--signal-sell)' : 
+                         'var(--signal-hold)',
+                  boxShadow: '1px 0 0 currentColor, -1px 0 0 currentColor, 0 1px 0 currentColor, 0 -1px 0 currentColor'
+                }}>
+                  {row.signal ?? 'HOLD'}
+                </span>
+              </td>
+            </tr>
+          ))}
+          {!loading && data.length === 0 && (
+            <tr><td colSpan={6} style={{padding:'16px 8px', color:'var(--text-secondary)', textAlign:'center'}}>
+              No screener data. Run the pipeline: python -m quant.pipeline --universe nifty50 --upload
+            </td></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }

@@ -147,8 +147,9 @@ export function ChartPanel({ symbol }: { symbol: string }) {
         const chartData = await chartRes.json()
         const signalData = await signalRes.json()
 
-        if (chartData.data && chartData.data.length > 0) {
-          const candleData: CandlestickData<Time>[] = chartData.data.map((d: ChartData) => ({
+        const chartDataArray = chartData.data || chartData
+        if (chartDataArray && chartDataArray.length > 0) {
+          const candleData: CandlestickData<Time>[] = chartDataArray.map((d: ChartData) => ({
             time: d.time as Time,
             open: d.open,
             high: d.high,

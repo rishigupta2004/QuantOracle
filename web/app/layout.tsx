@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs"
 
 import "./globals.css"
 import "@/styles/terminal.css"
+import { TickerStrip } from "@/components/shell/TickerStrip"
 
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" })
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" })
@@ -18,7 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <ClerkProvider>
       <html lang="en" className={`${mono.variable} ${jetbrains.variable} ${pressStart.variable}`}>
-        <body className="font-mono antialiased">{children}</body>
+        <body className="font-mono antialiased">
+          <TickerStrip />
+          {children}
+        </body>
       </html>
     </ClerkProvider>
   )

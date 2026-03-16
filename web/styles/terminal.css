@@ -1512,6 +1512,11 @@ body::after {
   text-decoration: underline;
 }
 
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .lab-shell {
