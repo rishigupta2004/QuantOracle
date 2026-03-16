@@ -20,9 +20,10 @@ Bloomberg covers Indian equities poorly for individual researchers. Quant tools 
 
 | Metric | Value |
 |---|---|
-| Universe | Nifty50 (50 symbols) |
-| Signal IC (mean, walk-forward) | 0.047 |
-| IC Sharpe | 0.61 |
+| Universe | Nifty50 (48 symbols) |
+|---|---|
+| Signal IC (mean, walk-forward) | 0.178 |
+| IC Sharpe | N/A (1 validation step) |
 | Pipeline runs | 2× daily via GitHub Actions |
 | Data source | Yahoo Finance (free) |
 
