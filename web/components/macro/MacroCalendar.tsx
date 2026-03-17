@@ -172,6 +172,94 @@ const MACRO_EVENTS: MacroEvent[] = [
     },
     what_to_watch: "YoY growth vs previous month",
   },
+  {
+    id: "india-gdp",
+    name: "India GDP (Quarterly)",
+    short: "India GDP Q3",
+    schedule: "Quarterly",
+    next_dates: ["2026-03-31", "2026-06-01"],
+    impact_level: "HIGH",
+    affects_sectors: ["Banking", "IT", "Auto", "FMCG"],
+    historical_impact: { positive: { nifty_5d_avg: +1.5 }, negative: { nifty_5d_avg: -1.2 } },
+    what_to_watch: "GDP growth vs consensus",
+  },
+  {
+    id: "nifty-fo-expiry",
+    name: "Nifty F&O Expiry",
+    short: "F&O Expiry",
+    schedule: "Last Thursday monthly",
+    next_dates: ["2026-03-27", "2026-04-30", "2026-05-29"],
+    impact_level: "MEDIUM",
+    affects_sectors: ["Banking", "IT"],
+    historical_impact: { positive: { nifty_5d_avg: +0.3 }, negative: { nifty_5d_avg: -0.3 } },
+    what_to_watch: "Monthly expiry volatility",
+  },
+  {
+    id: "nifty-rebalance",
+    name: "Nifty Rebalancing",
+    short: "Nifty Rebal",
+    schedule: "Semi-annual (Mar, Sep)",
+    next_dates: ["2026-03-31"],
+    impact_level: "HIGH",
+    affects_sectors: ["All Sectors"],
+    historical_impact: { positive: { nifty_5d_avg: +0.5 }, negative: { nifty_5d_avg: -0.5 } },
+    what_to_watch: "Stock additions and deletions",
+  },
+  {
+    id: "q4-fy25-results",
+    name: "Q4 FY25 Earnings Season",
+    short: "Q4 Results",
+    schedule: "Apr 7 - May 31",
+    next_dates: ["2026-04-07", "2026-05-15"],
+    impact_level: "HIGH",
+    affects_sectors: ["IT", "Banking", "Auto", "FMCG"],
+    historical_impact: { positive: { nifty_5d_avg: +2.5 }, negative: { nifty_5d_avg: -1.8 } },
+    what_to_watch: "Q4 FY25 results season",
+  },
+  {
+    id: "us-nfp",
+    name: "US Non-Farm Payrolls",
+    short: "US NFP",
+    schedule: "Monthly, first Friday",
+    next_dates: ["2026-04-04", "2026-05-02"],
+    impact_level: "HIGH",
+    affects_sectors: ["IT", "Banking", "FII Flows"],
+    historical_impact: { positive: { nifty_5d_avg: +0.8 }, negative: { nifty_5d_avg: -0.7 } },
+    what_to_watch: "US jobs report impact on Fed",
+  },
+  {
+    id: "india-monetary-policy",
+    name: "RBI MPC Minutes",
+    short: "MPC Minutes",
+    schedule: "2 weeks after policy",
+    next_dates: ["2026-04-23", "2026-06-18"],
+    impact_level: "MEDIUM",
+    affects_sectors: ["Banking", "Real Estate"],
+    historical_impact: { positive: { nifty_5d_avg: +0.4 }, negative: { nifty_5d_avg: -0.3 } },
+    what_to_watch: "Detailed minutes of MPC discussion",
+  },
+  {
+    id: "india-trade",
+    name: "India Trade Data",
+    short: "Trade Data",
+    schedule: "Monthly",
+    next_dates: ["2026-04-15", "2026-05-15"],
+    impact_level: "MEDIUM",
+    affects_sectors: ["IT", "Metals", "Auto"],
+    historical_impact: { positive: { nifty_5d_avg: +0.3 }, negative: { nifty_5d_avg: -0.2 } },
+    what_to_watch: "Export/import numbers",
+  },
+  {
+    id: "us-retail-sales",
+    name: "US Retail Sales",
+    short: "US Retail",
+    schedule: "Monthly",
+    next_dates: ["2026-04-16", "2026-05-15"],
+    impact_level: "MEDIUM",
+    affects_sectors: ["IT", "FII Flows"],
+    historical_impact: { positive: { nifty_5d_avg: +0.4 }, negative: { nifty_5d_avg: -0.3 } },
+    what_to_watch: "US consumer spending data",
+  },
 ]
 
 function getHistoricalSummary(event: MacroEvent): string {
@@ -348,7 +436,7 @@ export function MacroCalendar() {
         </div>
       )}
       
-      <div className="macro-events-container">
+      <div className="macro-events-container" style={{ overflowY: "auto", flex: 1, maxHeight: "calc(100vh - 200px)" }}>
         {grouped.today.length > 0 && (
           <div className="macro-group">
             <div className="macro-group-header">TODAY</div>

@@ -64,7 +64,7 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
           })
           
           // If not enough relevant, use all news
-          setNews(relevant.length >= 3 ? relevant : data.results.slice(0, 15))
+          setNews(relevant.length >= 3 ? relevant : data.results.slice(0, 20))
           
           // Calculate sentiment
           const bullishKeywords = ['surge', 'jump', 'gain', 'rise', 'rally', 'bullish', 'buy', 'upgrade', 'outperform']
@@ -178,7 +178,7 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
           className={`tab-btn ${activeTab === 'news' ? 'active' : ''}`}
           onClick={() => setActiveTab('news')}
         >
-          NEWS
+          NEWS 20
         </button>
         <button
           className={`tab-btn ${activeTab === 'social' ? 'active' : ''}`}
@@ -190,7 +190,7 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
           className={`tab-btn ${activeTab === 'clips' ? 'active' : ''}`}
           onClick={() => setActiveTab('clips')}
         >
-          CLIPS
+          VIDEOS
         </button>
       </div>
 
@@ -205,7 +205,7 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
                 <span className="pixel-loader" />
               </div>
             ) : (
-              news.slice(0, 15).map((item, i) => (
+              news.slice(0, 20).map((item, i) => (
                 <a
                   key={i}
                   href={item.link}
@@ -296,6 +296,32 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
                 </div>
               ))
             )}
+            
+            {/* Twitter Section */}
+            <div style={{
+              padding: '12px',
+              borderBottom: '1px solid var(--border-dim)',
+              background: 'var(--bg-raised)',
+            }}>
+              <a
+                href={`https://twitter.com/search?q=%24${symbol.replace('.NS', '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  textAlign: 'center',
+                  padding: '10px',
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border-dim)',
+                  color: 'var(--text-primary)',
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-pixel)',
+                  fontSize: '9px',
+                }}
+              >
+                View ${symbol.replace('.NS', '')} on Twitter →
+              </a>
+            </div>
           </div>
         )}
 
@@ -307,15 +333,42 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
                 <span className="pixel-loader" />
               </div>
             ) : clips.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '11px' }}>
-                <p>No video clips available</p>
-                <p style={{ fontSize: '10px', marginTop: '8px' }}>
-                  Add YOUTUBE_API_KEY to see video analysis
-                </p>
-                <div style={{ marginTop: '12px', fontSize: '10px' }}>
-                  <a href="https://youtube.com/@AkshatShrivastava" target="_blank" rel="noreferrer" style={{ color: 'var(--text-primary)', marginRight: '8px' }}>Akshat Shrivastava</a>
-                  <a href="https://youtube.com/@CARachanaRanade" target="_blank" rel="noreferrer" style={{ color: 'var(--text-primary)', marginRight: '8px' }}>CA Rachana Ranade</a>
-                  <a href="https://youtube.com/@Groww" target="_blank" rel="noreferrer" style={{ color: 'var(--text-primary)' }}>Groww</a>
+              <div style={{ padding: '12px' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '12px', textAlign: 'center' }}>
+                  No videos available for {symbol.replace('.NS', '')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {[
+                    { name: 'Akshat Shrivastava', handle: '@AkshatShrivastava', url: 'https://youtube.com/@AkshatShrivastava' },
+                    { name: 'CA Rachana Ranade', handle: '@CARachanaRanade', url: 'https://youtube.com/@CARachanaRanade' },
+                    { name: 'Finology Ticker', handle: '@FinologyTicker', url: 'https://youtube.com/@FinologyTicker' },
+                    { name: 'CNBC TV18', handle: '@CNBCTV18', url: 'https://youtube.com/@CNBCTV18' },
+                    { name: 'Groww', handle: '@Groww', url: 'https://youtube.com/@Groww' },
+                    { name: 'Zerodha', handle: '@ZerodhaLive', url: 'https://youtube.com/@ZerodhaLive' },
+                  ].map((channel) => (
+                    <a
+                      key={channel.handle}
+                      href={channel.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'block',
+                        padding: '10px',
+                        background: 'var(--bg-raised)',
+                        border: '1px solid var(--border-dim)',
+                        borderRadius: '4px',
+                        textDecoration: 'none',
+                        color: 'inherit',
+                      }}
+                    >
+                      <div style={{ fontSize: '9px', fontWeight: 600, marginBottom: '2px' }}>
+                        {channel.name}
+                      </div>
+                      <div style={{ fontSize: '8px', color: 'var(--text-secondary)' }}>
+                        {channel.handle}
+                      </div>
+                    </a>
+                  ))}
                 </div>
               </div>
             ) : (

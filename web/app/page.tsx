@@ -103,7 +103,6 @@ export default function Home() {
   return (
     <div className="terminal-root">
       <HeaderStrip onOpenCommand={() => setCommandOpen(true)} />
-      <TickerStrip />
       <CommandPalette
         isOpen={commandOpen}
         onClose={() => setCommandOpen(false)}

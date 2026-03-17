@@ -17,7 +17,10 @@ const NIFTY50_SYMBOLS = [
   "ONGC.NS", "COALINDIA.NS", "GRASIM.NS", "TATASTEEL.NS", "JSWSTEEL.NS", "INDUSINDBK.NS",
   "CIPLA.NS", "DRREDDY.NS", "DIVISLAB.NS", "APOLLOHOSP.NS", "ADANIENT.NS", "TATAMOTORS.NS",
   "BPCL.NS", "EICHERMOT.NS", "HAVELLS.NS", "VEDL.NS", "SHREECEM.NS", "PASSIONWAVE.NS",
-  "M&M.NS", "ULTRACEMCO.NS", "SBILIFE.NS", "ICICIPRULI.NS", "SIEMENS.NS", "HEROMOTOCO.NS"
+  "M&M.NS", "ULTRACEMCO.NS", "SBILIFE.NS", "ICICIPRULI.NS", "SIEMENS.NS", "HEROMOTOCO.NS",
+  // Additional symbols for better search
+  "YESBANK.NS", "TATAINVEST.NS", "COFORGE.NS", "PERSISTENT.NS", "LTI.NS", "MINDTREE.NS",
+  "MPHASIS.NS", "JUSTDIAL.NS", "SUZLON.NS", "RPOWER.NS", "JUNIORBEES.NS", "GOLDBEES.NS",
 ]
 
 const COMMANDS = [
@@ -126,7 +129,7 @@ export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isOpen, allResults, selected, onClose])
 
-  const handleSelect = (item: { type: "symbol" | "command" | "search"; id: string; label: string; data?: unknown }) => {
+  const handleSelect = async (item: { type: "symbol" | "command" | "search"; id: string; label: string; data?: unknown }) => {
     if (item.type === "symbol") {
       onSymbolSelect?.(item.id)
     } else if (item.type === "command") {
@@ -136,7 +139,24 @@ export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange
       else if (item.id === "layout-pulse") onLayoutChange?.("pulse")
     } else if (item.type === "search") {
       const symbol = item.data as string
-      onSymbolSelect?.(`${symbol}.NS`)
+      const fullSymbol = symbol.includes('.') ? symbol : `${symbol}.NS`
+      
+      // Verify the symbol exists before loading
+      try {
+        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(fullSymbol)}`)
+        const data = await res.json()
+        const quote = data.quotes?.[fullSymbol]
+        
+        if (quote?.price) {
+          onSymbolSelect?.(fullSymbol)
+        } else {
+          // Try without .NS suffix (for US stocks)
+          onSymbolSelect?.(symbol)
+        }
+      } catch {
+        // Just try to load it anyway
+        onSymbolSelect?.(fullSymbol)
+      }
     }
     onClose()
   }

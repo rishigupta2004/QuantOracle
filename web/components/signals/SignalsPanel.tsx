@@ -323,13 +323,18 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       if (reader) {
+        let text = ""
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          setExplanation(prev => prev + decoder.decode(value))
+          text += decoder.decode(value)
+          setExplanation(text)
         }
       }
-    } catch {}
+    } catch (err) {
+      console.error("Explain error:", err)
+      setExplanation("Analysis temporarily unavailable. The AI service may be rate-limited or unavailable.")
+    }
     finally { setExplaining(false) }
   }
 
@@ -475,9 +480,39 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
           >
             {explaining ? "◎ Analyzing..." : "◎ EXPLAIN THIS SIGNAL"}
           </button>
-          {explanation && (
-            <div style={{ marginTop: 8, fontSize: 9, lineHeight: 1.5, color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+
+          {(explanation || explaining) && (
+            <div style={{
+              marginTop: '8px',
+              padding: '10px',
+              background: 'var(--bg-raised)',
+              borderLeft: '2px solid var(--text-accent)',
+              fontSize: '12px',
+              lineHeight: '1.7',
+              color: 'var(--text-secondary)',
+              minHeight: explaining && !explanation ? '40px' : 'auto',
+              transition: 'all 0.3s ease',
+            }}>
+              {explaining && !explanation && (
+                <div style={{
+                  fontFamily: 'var(--font-pixel)',
+                  fontSize: '7px',
+                  color: 'var(--text-accent)',
+                }}>
+                  ANALYZING...
+                </div>
+              )}
               {explanation}
+              {explaining && explanation && (
+                <span style={{
+                  display: 'inline-block',
+                  width: '8px', 
+                  height: '14px',
+                  background: 'var(--text-accent)',
+                  marginLeft: '2px',
+                  animation: 'blink 0.8s step-end infinite',
+                }}/>
+              )}
             </div>
           )}
         </div>

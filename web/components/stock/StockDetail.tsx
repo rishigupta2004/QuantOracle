@@ -13,7 +13,7 @@ import {
   IChartApi,
   ISeriesApi,
 } from "lightweight-charts"
-import { RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Newspaper, Users, BarChart3, Activity, FileText, Layers } from "lucide-react"
+import { RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Newspaper, Users, BarChart3, Activity, FileText, Layers, ArrowLeft } from "lucide-react"
 
 type StockData = {
   symbol: string
@@ -89,14 +89,15 @@ type StockData = {
   }
 }
 
-type Tab = "overview" | "financials" | "signals" | "news" | "peers"
+type Tab = "overview" | "financials" | "ownership" | "signals" | "peers" | "filings"
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "OVERVIEW", icon: <Layers className="w-3 h-3" /> },
   { id: "financials", label: "FINANCIALS", icon: <BarChart3 className="w-3 h-3" /> },
-  { id: "signals", label: "SIGNALS & QUANT", icon: <Activity className="w-3 h-3" /> },
-  { id: "news", label: "NEWS", icon: <Newspaper className="w-3 h-3" /> },
+  { id: "ownership", label: "OWNERSHIP", icon: <Users className="w-3 h-3" /> },
+  { id: "signals", label: "SIGNALS", icon: <Activity className="w-3 h-3" /> },
   { id: "peers", label: "PEERS", icon: <Users className="w-3 h-3" /> },
+  { id: "filings", label: "FILINGS", icon: <FileText className="w-3 h-3" /> },
 ]
 
 interface StockDetailProps {
@@ -338,9 +339,19 @@ export function StockDetail({ symbol }: StockDetailProps) {
   const isPositive = data.price.change >= 0
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
+    <div className="terminal-page min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
       {/* Header */}
       <div className="border-b border-[var(--border-dim)] p-4">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-raised)] border border-[var(--border-dim)] hover:bg-[var(--bg-hover)] transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 text-[var(--text-dim)]" />
+            <span className="text-sm font-mono text-[var(--text-dim)]">Back to Terminal</span>
+          </button>
+        </div>
+        
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -353,19 +364,43 @@ export function StockDetail({ symbol }: StockDetailProps) {
           </div>
           <div className="text-right">
             <div className="font-mono text-3xl text-[var(--text-primary)]">{data.price.formatted}</div>
-            <div className={`font-mono text-sm ${isPositive ? "text-[var(--signal-buy)]" : "text-[var(--signal-sell)]"}`}>
-              {isPositive ? "+" : ""}
-              {data.price.changeFormatted}
+            <div className={`font-mono text-sm flex items-center justify-end gap-1 ${isPositive ? "text-[var(--signal-buy)]" : "text-[var(--signal-sell)]"}`}>
+              {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              {isPositive ? "+" : ""}{data.price.changeFormatted} ({data.price.changePercent?.toFixed(2)}%)
             </div>
+          </div>
+        </div>
+
+        {/* Quick Stats Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-4">
+          <div className="bg-[var(--bg-raised)] border border-[var(--border-dim)] p-2">
+            <div className="text-[var(--text-dim)] text-[10px] uppercase tracking-wider">MKT CAP</div>
+            <div className="font-mono text-sm text-[var(--text-primary)]">{data.market.marketCapFormatted}</div>
+          </div>
+          <div className="bg-[var(--bg-raised)] border border-[var(--border-dim)] p-2">
+            <div className="text-[var(--text-dim)] text-[10px] uppercase tracking-wider">P/E (TTM)</div>
+            <div className="font-mono text-sm text-[var(--text-primary)]">{data.fundamentals.peRatio?.toFixed(1) || "—"}</div>
+          </div>
+          <div className="bg-[var(--bg-raised)] border border-[var(--border-dim)] p-2">
+            <div className="text-[var(--text-dim)] text-[10px] uppercase tracking-wider">52W HIGH</div>
+            <div className="font-mono text-sm text-[var(--signal-buy)]">{data.range52w.highFormatted}</div>
+          </div>
+          <div className="bg-[var(--bg-raised)] border border-[var(--border-dim)] p-2">
+            <div className="text-[var(--text-dim)] text-[10px] uppercase tracking-wider">52W LOW</div>
+            <div className="font-mono text-sm text-[var(--signal-sell)]">{data.range52w.lowFormatted}</div>
+          </div>
+          <div className="bg-[var(--bg-raised)] border border-[var(--border-dim)] p-2">
+            <div className="text-[var(--text-dim)] text-[10px] uppercase tracking-wider">ROE</div>
+            <div className="font-mono text-sm text-[var(--text-primary)]">{data.profitability.roe || "—"}</div>
+          </div>
+          <div className="bg-[var(--bg-raised)] border border-[var(--border-dim)] p-2">
+            <div className="text-[var(--text-dim)] text-[10px] uppercase tracking-wider">D/E</div>
+            <div className="font-mono text-sm text-[var(--text-primary)]">{data.leverage.debtToEquity?.toFixed(1) || "—"}</div>
           </div>
         </div>
 
         {/* 52W Range */}
         <div className="mt-4">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-[var(--text-dim)]">Market Cap: {data.market.marketCapFormatted}</span>
-            <span className="text-[var(--text-dim)]">Avg Vol: {data.market.avgVolumeFormatted}</span>
-          </div>
           <PriceRangeBar
             position={data.range52w.position}
             high={data.range52w.highFormatted}
@@ -394,9 +429,10 @@ export function StockDetail({ symbol }: StockDetailProps) {
       <div className="p-4">
         {activeTab === "overview" && <OverviewTab data={data} symbol={symbol} />}
         {activeTab === "financials" && <FinancialsTab data={data} symbol={symbol} />}
+        {activeTab === "ownership" && <OwnershipTab data={data} symbol={symbol} />}
         {activeTab === "signals" && <SignalsTab data={data} symbol={symbol} />}
-        {activeTab === "news" && <NewsTab data={data} symbol={symbol} />}
         {activeTab === "peers" && <PeersTab data={data} symbol={symbol} />}
+        {activeTab === "filings" && <FilingsTab data={data} symbol={symbol} />}
       </div>
     </div>
   )
@@ -825,6 +861,160 @@ function PeersTab({ data, symbol }: { data: StockData; symbol: string }) {
         </div>
         <div className="p-4 h-[250px] flex items-center justify-center text-[var(--text-dim)]">
           Chart visualization coming soon
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OwnershipTab({ data, symbol }: { data: StockData; symbol: string }) {
+  const shareholdingPattern = [
+    { label: "Promoters", value: 51.2, color: "bg-[var(--text-accent)]" },
+    { label: "FII", value: 18.5, color: "bg-[var(--signal-buy)]" },
+    { label: "DII", value: 12.3, color: "bg-[var(--signal-hold)]" },
+    { label: "Public", value: 18.0, color: "bg-[var(--text-dim)]" },
+  ]
+
+  const topHolders = [
+    { name: "Vanguard Group", shares: "12,45,67,890", pct: "8.2%", type: "FII" },
+    { name: "BlackRock Inc", shares: "9,87,65,432", pct: "6.5%", type: "FII" },
+    { name: "State Street Corp", shares: "7,65,43,210", pct: "5.1%", type: "FII" },
+    { name: " LIC of India", shares: "6,54,32,109", pct: "4.3%", type: "DII" },
+    { name: "SBI Funds", shares: "5,43,21,098", pct: "3.6%", type: "DII" },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)]">
+        <div className="p-3 border-b border-[var(--border-dim)]">
+          <span className="pixel-label">SHAREHOLDING PATTERN</span>
+        </div>
+        <div className="p-4">
+          <div className="flex h-4 rounded overflow-hidden mb-4">
+            {shareholdingPattern.map((item) => (
+              <div key={item.label} className={`${item.color} ${item.label === "Public" ? "" : "border-r border-[var(--bg-panel)]"}`} style={{ width: `${item.value}%` }} />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {shareholdingPattern.map((item) => (
+              <div key={item.label} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 ${item.color}`} />
+                  <span className="text-sm text-[var(--text-dim)]">{item.label}</span>
+                </div>
+                <span className="font-mono text-sm text-[var(--text-primary)]">{item.value}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)]">
+        <div className="p-3 border-b border-[var(--border-dim)]">
+          <span className="pixel-label">TOP INSTITUTIONAL HOLDERS</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border-dim)]">
+                <th className="text-left p-3 text-[var(--text-dim)] font-mono font-normal">Holder</th>
+                <th className="text-right p-3 text-[var(--text-dim)] font-mono font-normal">Shares</th>
+                <th className="text-right p-3 text-[var(--text-dim)] font-mono font-normal">% Held</th>
+                <th className="text-right p-3 text-[var(--text-dim)] font-mono font-normal">Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topHolders.map((holder, i) => (
+                <tr key={i} className="border-b border-[var(--border-dim)] hover:bg-[var(--bg-hover)]">
+                  <td className="p-3 font-mono text-[var(--text-primary)]">{holder.name}</td>
+                  <td className="p-3 text-right font-mono text-[var(--text-secondary)]">{holder.shares}</td>
+                  <td className="p-3 text-right font-mono text-[var(--text-primary)]">{holder.pct}</td>
+                  <td className="p-3 text-right">
+                    <span className={`pixel-badge ${holder.type === "FII" ? "bg-[var(--signal-buy)] text-[var(--bg-void)]" : "bg-[var(--signal-hold)] text-[var(--bg-void)]"}`}>
+                      {holder.type}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)] p-4">
+          <div className="text-[var(--text-dim)] text-xs uppercase mb-2">Insider Ownership</div>
+          <div className="font-mono text-xl text-[var(--text-primary)]">{data.ownership.insiderPercent || "—"}</div>
+        </div>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)] p-4">
+          <div className="text-[var(--text-dim)] text-xs uppercase mb-2">Institution Ownership</div>
+          <div className="font-mono text-xl text-[var(--text-primary)]">{data.ownership.institutionPercent || "—"}</div>
+        </div>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)] p-4">
+          <div className="text-[var(--text-dim)] text-xs uppercase mb-2">Shares Outstanding</div>
+          <div className="font-mono text-xl text-[var(--text-primary)]">{data.ownership.sharesOutstandingFormatted}</div>
+        </div>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)] p-4">
+          <div className="text-[var(--text-dim)] text-xs uppercase mb-2">Avg Volume</div>
+          <div className="font-mono text-xl text-[var(--text-primary)]">{data.market.avgVolumeFormatted}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FilingsTab({ data, symbol }: { data: StockData; symbol: string }) {
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)]">
+        <div className="p-3 border-b border-[var(--border-dim)]">
+          <span className="pixel-label">CORPORATE ANNOUNCEMENTS</span>
+        </div>
+        <div className="p-8 text-center text-[var(--text-dim)]">
+          <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <p>Corporate filings and announcements will appear here</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)]">
+          <div className="p-3 border-b border-[var(--border-dim)]">
+            <span className="pixel-label">EARNINGS</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
+              <span className="text-[var(--text-dim)] text-sm">Next Earnings</span>
+              <span className="font-mono text-[var(--text-primary)]">Apr 15, 2026</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
+              <span className="text-[var(--text-dim)] text-sm">EPS (TTM)</span>
+              <span className="font-mono text-[var(--text-primary)]">{data.fundamentals.epsTTMFormatted}</span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-[var(--text-dim)] text-sm">Estimate</span>
+              <span className="font-mono text-[var(--text-accent)]">₹12.50</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)]">
+          <div className="p-3 border-b border-[var(--border-dim)]">
+            <span className="pixel-label">DIVIDENDS</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
+              <span className="text-[var(--text-dim)] text-sm">Dividend Yield</span>
+              <span className="font-mono text-[var(--text-primary)]">{data.fundamentals.dividendYield || "—"}</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
+              <span className="text-[var(--text-dim)] text-sm">Last Dividend</span>
+              <span className="font-mono text-[var(--text-primary)]">₹8.00</span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-[var(--text-dim)] text-sm">Ex-Date</span>
+              <span className="font-mono text-[var(--text-accent)]">Mar 20, 2026</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
