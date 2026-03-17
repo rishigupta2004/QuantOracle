@@ -36,7 +36,7 @@ function ReturnChart({ data }: { data: { date: string; model: number; benchmark:
 }
 
 // IC bar chart — green/red bars
-function IcChart({ data }: { data: { period: string; ic: number }[] }) {
+function IcChart({ data }: { data: { date: string; ic: number }[] }) {
   if (data.length < 2) return <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 9 }}>No data</div>
   const w = 400, h = 60
   const maxAbs = Math.max(...data.map(d => Math.abs(d.ic)), 0.01)
