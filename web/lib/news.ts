@@ -383,21 +383,68 @@ async function fromNewsData(query: string): Promise<NewsItem[]> {
     return []
   }
   try {
-    const q = query || "market OR stocks OR nifty OR crypto"
-    const r = await fetchWithTimeout(
-      `https://newsdata.io/api/1/news?apikey=${encodeURIComponent(key)}&language=en&q=${encodeURIComponent(q)}`,
-      6500
-    )
+    // Use broader query for more results
+    const q = query || "stock market OR NSE OR BSE OR Nifty OR Sensex OR RBI OR SEBI OR rupee OR oil price OR Fed rate"
+    const url = new URL(`https://newsdata.io/api/1/news?apikey=${encodeURIComponent(key)}`)
+    url.searchParams.set('language', 'en')
+    url.searchParams.set('q', q)
+    url.searchParams.set('category', 'business,politics,economics')
+    url.searchParams.set('size', '50')  // Get more results
+    url.searchParams.set('country', 'in,us,gb')
+    
+    const r = await fetchWithTimeout(url.toString(), 6500)
     if (!r.ok) {
       return []
     }
     const data = (await r.json()) as { results?: Array<Record<string, unknown>> }
-    return (data.results ?? []).slice(0, 16).map((n) => ({
-      headline: String(n.title ?? "Untitled"),
-      summary: clean(String(n.description ?? "")),
-      url: String(n.link ?? "#"),
-      source: String(n.source_id ?? "NewsData"),
-      datetime: String(n.pubDate ?? "Recent")
+    
+    // Market keywords for filtering
+    const MARKET_KEYWORDS = [
+      'nifty', 'sensex', 'nse', 'bse', 'sebi', 'rbi', 'rupee', 'inr',
+      'fii', 'dii', 'ipo', 'india', 'reliance', 'tcs', 'hdfc', 'infosys',
+      'wipro', 'adani', 'tata', 'bajaj', 'icici', 'kotak', 'stock', 'share',
+      'equity', 'market', 'trading', 'invest', 'fund', 'mutual', 'portfolio',
+      'oil', 'crude', 'gold', 'dollar', 'fed', 'rate', 'inflation', 'gdp',
+    ]
+    
+    const isRelevant = (item: any) => {
+      const text = (
+        (item.title ?? '') + ' ' + 
+        (item.description ?? '') + ' ' +
+        (item.content ?? '')
+      ).toLowerCase()
+      return MARKET_KEYWORDS.some(kw => text.includes(kw))
+    }
+    
+    const articles = (data.results ?? []).map((n) => ({
+      title: String(n.title ?? "Untitled"),
+      link: String(n.link ?? "#"),
+      pubDate: String(n.pubDate ?? "Recent"),
+      source_id: String(n.source_id ?? "NewsData"),
+      description: String(n.description ?? ""),
+      content: String(n.content ?? ""),
+    }))
+    
+    // Filter for relevant articles
+    const relevant = articles.filter(isRelevant).slice(0, 20)
+    
+    // If fewer than 5 relevant, show top from all
+    if (relevant.length < 5) {
+      return articles.slice(0, 10).map((n) => ({
+        headline: n.title,
+        summary: n.description,
+        url: n.link,
+        source: n.source_id,
+        datetime: n.pubDate,
+      }))
+    }
+    
+    return relevant.slice(0, 20).map((n) => ({
+      headline: n.title,
+      summary: n.description,
+      url: n.link,
+      source: n.source_id,
+      datetime: n.pubDate,
     }))
   } catch {
     return []
@@ -439,7 +486,7 @@ async function fromGNews(query: string): Promise<NewsItem[]> {
   try {
     const q = query || "stock market"
     const r = await fetchWithTimeout(
-      `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=en&max=20&apikey=${encodeURIComponent(key)}`,
+      `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=en&max=50&apikey=${encodeURIComponent(key)}`,
       6500
     )
     if (!r.ok) {

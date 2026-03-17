@@ -45,39 +45,69 @@ async function fetchFromYahoo(symbol: string) {
 }
 
 async function getFundamentals(symbol: string) {
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile`
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      next: { revalidate: 3600 }
-    })
-    const json = await res.json()
-    const s = json?.quoteSummary?.result?.[0]
-    if (!s) return null
-    
-    const sd = s.summaryDetail || {}
-    const ks = s.defaultKeyStatistics || {}
-    const fd = s.financialData || {}
-    const ap = s.assetProfile || {}
-    
-    return {
-      pe_ratio: sd?.trailingPE?.raw ?? null,
-      pb_ratio: ks?.priceToBook?.raw ?? null,
-      roe: fd?.returnOnEquity?.raw ? (fd.returnOnEquity.raw * 100).toFixed(1) + '%' : null,
-      debt_to_equity: fd?.debtToEquity?.raw ?? null,
-      market_cap: sd?.marketCap?.raw ?? null,
-      market_cap_fmt: sd?.marketCap?.fmt ?? null,
-      revenue: fd?.totalRevenue?.fmt ?? null,
-      profit_margin: fd?.profitMargins?.raw ? (fd.profitMargins.raw * 100).toFixed(1) + '%' : null,
-      week_52_high: sd?.fiftyTwoWeekHigh?.raw ?? null,
-      week_52_low: sd?.fiftyTwoWeekLow?.raw ?? null,
-      avg_volume: sd?.averageVolume?.fmt ?? null,
-      dividend_yield: sd?.dividendYield?.raw ? (sd.dividendYield.raw * 100).toFixed(2) + '%' : null,
-      sector: ap?.sector ?? null,
-      industry: ap?.industry ?? null,
-      description: ap?.longBusinessSummary?.slice(0, 200) ?? null,
+  // Try query2 first (newer endpoint), fall back to query1
+  const endpoints = [
+    `https://query2.finance.yahoo.com/v11/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile`,
+    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile`,
+  ]
+  
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+          'Accept': 'application/json',
+        },
+        next: { revalidate: 3600 }
+      })
+      
+      if (!res.ok) continue
+      
+      const json = await res.json()
+      const s = json?.quoteSummary?.result?.[0]
+      if (!s) continue
+      
+      const sd = s.summaryDetail || {}
+      const ks = s.defaultKeyStatistics || {}
+      const fd = s.financialData || {}
+      const ap = s.assetProfile || {}
+      
+      // Format market cap for Indian stocks
+      const rawMktCap = sd?.marketCap?.raw ?? null
+      let marketCapFormatted = sd?.marketCap?.fmt ?? null
+      
+      if (rawMktCap && symbol.endsWith('.NS')) {
+        // Indian style formatting
+        if (rawMktCap >= 1e12) {
+          marketCapFormatted = `₹${(rawMktCap / 1e12).toFixed(1)}L Cr`
+        } else if (rawMktCap >= 1e10) {
+          marketCapFormatted = `₹${(rawMktCap / 1e7).toFixed(0)} Cr`
+        }
+      }
+      
+      return {
+        pe_ratio: sd?.trailingPE?.raw ?? null,
+        pb_ratio: ks?.priceToBook?.raw ?? null,
+        roe: fd?.returnOnEquity?.raw ? (fd.returnOnEquity.raw * 100).toFixed(1) + '%' : null,
+        debt_to_equity: fd?.debtToEquity?.raw ?? null,
+        market_cap: rawMktCap,
+        market_cap_fmt: marketCapFormatted,
+        revenue: fd?.totalRevenue?.fmt ?? null,
+        profit_margin: fd?.profitMargins?.raw ? (fd.profitMargins.raw * 100).toFixed(1) + '%' : null,
+        week_52_high: sd?.fiftyTwoWeekHigh?.raw ?? null,
+        week_52_low: sd?.fiftyTwoWeekLow?.raw ?? null,
+        avg_volume: sd?.averageVolume?.fmt ?? null,
+        dividend_yield: sd?.dividendYield?.raw ? (sd.dividendYield.raw * 100).toFixed(2) + '%' : null,
+        sector: ap?.sector ?? null,
+        industry: ap?.industry ?? null,
+        description: ap?.longBusinessSummary?.slice(0, 200) ?? null,
+      }
+    } catch {
+      continue
     }
-  } catch { return null }
+  }
+  
+  return null
 }
 
 async function calculateSignal(symbol: string) {
