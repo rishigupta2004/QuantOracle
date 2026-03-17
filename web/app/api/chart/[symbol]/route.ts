@@ -8,6 +8,17 @@ export const dynamic = "force-dynamic"
 const chartCache = new Map<string, { data: unknown; expires: number }>()
 
 async function fetchFromYahoo(symbol: string, period: string = "1y") {
+  const intervalMap: Record<string, string> = {
+    "1wk": "15m",
+    "1mo": "1d",
+    "3mo": "1d",
+    "6mo": "1d",
+    "1y": "1d",
+    "2y": "1wk",
+    "5y": "1wk",
+    "max": "1mo"
+  }
+
   const rangeMap: Record<string, string> = {
     "1wk": "5d",
     "1mo": "1mo",
@@ -18,9 +29,11 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
     "5y": "5y",
     "max": "max"
   }
+
+  const interval = intervalMap[period] || "1d"
   const range = rangeMap[period] || "1y"
   
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`
   
   const res = await fetch(url, {
     headers: { 

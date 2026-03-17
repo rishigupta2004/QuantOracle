@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
 
   const q = req.nextUrl.searchParams.get("q") || ""
   const symbol = req.nextUrl.searchParams.get("symbol")
-  const limit = Number(req.nextUrl.searchParams.get("limit") || "16")
-  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 40) : 16
+  const limit = Number(req.nextUrl.searchParams.get("limit") || "30")
+  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 40) : 30
   
   const [items, snapshot] = await Promise.all([getNews(q), getNewsSnapshotInfo()])
   const sliced = items.slice(0, safeLimit)

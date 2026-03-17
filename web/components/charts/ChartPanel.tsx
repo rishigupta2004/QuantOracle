@@ -6,6 +6,7 @@ import {
   ColorType, CrosshairMode, LineStyle,
   CandlestickData, Time, HistogramData, IChartApi, ISeriesApi,
 } from "lightweight-charts"
+import { getMarketStatuses } from "@/lib/market-hours"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,28 @@ type Tooltip = {
 }
 
 type CompareSymbol = { symbol: string; data: { time: string; value: number }[]; color: string; pct: number }
+
+type SignalHistory = {
+  date: string
+  verdict: string
+  was_correct: boolean
+  forward_5d_return: number
+  price_at_signal: number
+}
+
+type SignalStats = {
+  total: number
+  buy_count: number
+  sell_count: number
+  correct: number
+  hit_rate: number
+  buy_accuracy: number
+  sell_accuracy: number
+  avg_buy_return: number
+  avg_sell_avoided: number
+  best_signal: SignalHistory | null
+  worst_signal: SignalHistory | null
+}
 
 const PERIOD_BUTTONS: { label: string; value: Period }[] = [
   { label: "1W", value: "1wk" },
@@ -77,6 +100,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
   const [loading, setLoading] = useState(true)
   const [tooltip, setTooltip] = useState<Tooltip | null>(null)
   const tooltipRef = useRef<Tooltip | null>(null)
+  const [isLive, setIsLive] = useState(false)
 
   // Compare mode
   const [compareOpen, setCompareOpen] = useState(false)
@@ -84,11 +108,20 @@ export function ChartPanel({ symbol }: { symbol: string }) {
   const [compareSymbols, setCompareSymbols] = useState<CompareSymbol[]>([])
   const [compareMode, setCompareMode] = useState(false)
 
+  // Signal history overlay
+  const [showSignalHistory, setShowSignalHistory] = useState(false)
+  const [signalHistory, setSignalHistory] = useState<SignalHistory[]>([])
+  const [signalStats, setSignalStats] = useState<SignalStats | null>(null)
+  const [signalLoading, setSignalLoading] = useState(false)
+
   // Raw data refs for tooltip
   const rawCandlesRef = useRef<ChartData[]>([])
   const rawEma21Ref = useRef<{ time: string; value: number }[]>([])
   const rawEma55Ref = useRef<{ time: string; value: number }[]>([])
   const rawVolumeRef = useRef<{ time: string; value: number }[]>([])
+
+  // NSE symbol check (used for live refresh)
+  const isNSE = symbol.endsWith(".NS") || symbol.endsWith(".BO")
 
   // ─── Chart Init (once) ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -386,14 +419,123 @@ export function ChartPanel({ symbol }: { symbol: string }) {
     return () => window.removeEventListener("keydown", handleKey)
   }, [compareSymbols, removeCompareSymbol])
 
+  // ─── Signal history overlay ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!showSignalHistory) {
+      ;(candleSeriesRef.current as unknown as { setMarkers: (m: unknown[]) => void }).setMarkers([])
+      setSignalHistory([])
+      setSignalStats(null)
+      return
+    }
+
+    const fetchSignalHistory = async () => {
+      setSignalLoading(true)
+      try {
+        const res = await fetch(`/api/signals/history/${encodeURIComponent(symbol)}?t=${Date.now()}`)
+        const data = await res.json()
+        if (data.signals) {
+          setSignalHistory(data.signals)
+          setSignalStats(data.stats)
+          
+          const markers = data.signals.map((s: SignalHistory) => ({
+            time: s.date as Time,
+            position: "aboveBar" as const,
+            color: s.was_correct 
+              ? (s.verdict === "BUY" ? "#00ff88" : "#ff3355")
+              : "#666666",
+            shape: s.verdict === "BUY" ? "arrowUp" : "arrowDown",
+            text: s.verdict === "BUY" 
+              ? (s.was_correct ? "BUY ✓" : "BUY ✗")
+              : (s.was_correct ? "SELL ✓" : "SELL ✗"),
+          }))
+          ;(candleSeriesRef.current as unknown as { setMarkers: (m: unknown[]) => void }).setMarkers(markers)
+        }
+      } catch (err) {
+        console.error("Signal history fetch error:", err)
+      } finally {
+        setSignalLoading(false)
+      }
+    }
+
+    fetchSignalHistory()
+  }, [showSignalHistory, symbol])
+
+  // ─── Live refresh for 1W period ─────────────────────────────────────────────
+  const fetchLiveData = useCallback(async () => {
+    if (!chartRef.current || loading) return
+    try {
+      const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=${period}&t=${Date.now()}`)
+      const chartData = await res.json()
+      const candles: ChartData[] = chartData.candles || []
+      if (candles.length > 0) {
+        rawCandlesRef.current = candles
+        rawEma21Ref.current = chartData.ema21 || []
+        rawEma55Ref.current = chartData.ema55 || []
+        rawVolumeRef.current = chartData.volume || []
+
+        const candleData: CandlestickData<Time>[] = candles.map((d) => ({
+          time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close,
+        }))
+        candleSeriesRef.current?.setData(candleData)
+        ema21Ref.current?.setData((chartData.ema21 || []).map((d: any) => ({ time: d.time as Time, value: d.value })))
+        ema55Ref.current?.setData((chartData.ema55 || []).map((d: any) => ({ time: d.time as Time, value: d.value })))
+
+        if (chartData.ema21 && candles.length >= 20) {
+          const closes = candles.map(c => c.close)
+          const bbData = computeBB(closes, candles.map(c => c.time))
+          bbUpperRef.current?.setData(bbData.upper.map(d => ({ time: d.time as Time, value: d.value })))
+          bbLowerRef.current?.setData(bbData.lower.map(d => ({ time: d.time as Time, value: d.value })))
+        }
+
+        rsiRef.current?.setData((chartData.rsi || []).map((d: any) => ({ time: d.time as Time, value: d.value })))
+
+        const macdHistData: HistogramData<Time>[] = (chartData.macd_histogram || []).map((d: any) => ({
+          time: d.time as Time,
+          value: d.value,
+          color: d.value >= 0 ? "rgba(0,255,136,0.7)" : "rgba(255,51,85,0.7)",
+        }))
+        macdRef.current?.setData(macdHistData)
+
+        const volumeData: HistogramData<Time>[] = (chartData.volume || []).map((d: any, i: number) => ({
+          time: d.time as Time,
+          value: d.value,
+          color: candles[i]?.close >= candles[i]?.open ? "rgba(0,255,136,0.35)" : "rgba(255,51,85,0.35)",
+        }))
+        volumeRef.current?.setData(volumeData)
+      }
+    } catch (err) {
+      console.error("Live refresh error:", err)
+    }
+  }, [symbol, period, loading])
+
+  useEffect(() => {
+    const statuses = getMarketStatuses()
+    const nse = statuses.find(s => s.name === "NSE")
+    const isNSEOpen = nse?.status === "LIVE" && isNSE
+    setIsLive(isNSEOpen && period === "1wk")
+  }, [isNSE, period])
+
+  useEffect(() => {
+    if (!isLive) return
+    const interval = setInterval(fetchLiveData, 15000)
+    return () => clearInterval(interval)
+  }, [isLive, fetchLiveData])
+
   // ─── Render ─────────────────────────────────────────────────────────────────
-  const isNSE = symbol.endsWith(".NS") || symbol.endsWith(".BO")
 
   return (
     <div className="chart-panel terminal-panel" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <div className="panel-header" style={{ flexShrink: 0 }}>
         <span className="panel-title">{symbol}</span>
+        {isLive && (
+          <span style={{
+            fontFamily: "var(--font-pixel)", fontSize: 8, color: "#00ff88",
+            marginLeft: 8, display: "flex", alignItems: "center", gap: 4,
+          }}>
+            <span style={{ animation: "pulse 1.5s infinite" }}>●</span> LIVE
+          </span>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {/* Period switcher */}
           <div style={{ display: "flex", gap: 2 }}>
@@ -421,6 +563,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
               { key: "EMA", active: showEMA, toggle: () => setShowEMA(p => !p) },
               { key: "BB", active: showBB, toggle: () => setShowBB(p => !p) },
               { key: "VOL", active: showVOL, toggle: () => setShowVOL(p => !p) },
+              { key: "◉ SIGNAL HISTORY", active: showSignalHistory, toggle: () => setShowSignalHistory(p => !p) },
             ].map(({ key, active, toggle }) => (
               <button
                 key={key}
@@ -525,6 +668,97 @@ export function ChartPanel({ symbol }: { symbol: string }) {
           </div>
         )}
       </div>
+
+      {/* Signal accuracy stats */}
+      {showSignalHistory && signalStats && (
+        <div style={{
+          background: "var(--bg-raised)", borderTop: "1px solid var(--border-dim)",
+          padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 10,
+          color: "var(--text-secondary)", flexShrink: 0,
+        }}>
+          <div style={{ 
+            color: "var(--text-accent)", fontSize: 9, fontFamily: "var(--font-pixel)",
+            marginBottom: 8, letterSpacing: 1,
+          }}>
+            SIGNAL ACCURACY — {symbol} (last 1 year)
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+            <div>
+              <span style={{ color: "var(--text-dim)" }}>Total signals:</span>{" "}
+              <span style={{ color: "var(--text-primary)" }}>{signalStats.total}</span>
+              {" "}(<span style={{ color: "#00ff88" }}>{signalStats.buy_count} BUY</span>,{" "}
+              <span style={{ color: "#ff3355" }}>{signalStats.sell_count} SELL</span>)
+            </div>
+            <div>
+              <span style={{ color: "var(--text-dim)" }}>Correct:</span>{" "}
+              <span style={{ color: signalStats.hit_rate >= 60 ? "#00ff88" : signalStats.hit_rate >= 40 ? "#ffaa00" : "#ff3355" }}>
+                {signalStats.correct}/{signalStats.total} = {signalStats.hit_rate}% hit rate
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#00ff88" }}>BUY accuracy:</span>{" "}
+              {signalStats.buy_count > 0 
+                ? `${Math.round(signalStats.buy_count * signalStats.buy_accuracy / 100)}/${signalStats.buy_count} = ${signalStats.buy_accuracy}%`
+                : "N/A"
+              }
+              {" "}avg return: <span style={{ color: signalStats.avg_buy_return >= 0 ? "#00ff88" : "#ff3355" }}>
+                {signalStats.avg_buy_return >= 0 ? "+" : ""}{signalStats.avg_buy_return}%
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#ff3355" }}>SELL accuracy:</span>{" "}
+              {signalStats.sell_count > 0 
+                ? `${Math.round(signalStats.sell_count * signalStats.sell_accuracy / 100)}/${signalStats.sell_count} = ${signalStats.sell_accuracy}%`
+                : "N/A"
+              }
+              {" "}avg avoided: <span style={{ color: signalStats.avg_sell_avoided <= 0 ? "#00ff88" : "#ff3355" }}>
+                {signalStats.avg_sell_avoided <= 0 ? "" : "+"}{signalStats.avg_sell_avoided}%
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#ff3355" }}>SELL accuracy:</span>{" "}
+              {signalStats.sell_count > 0 
+                ? `${Math.round(signalStats.sell_count * signalStats.sell_accuracy / 100)}/${signalStats.sell_count} = ${signalStats.sell_accuracy}%`
+                : "N/A"
+              }
+              {" "}avg avoided: <span style={{ color: signalStats.avg_sell_avoided <= 0 ? "#00ff88" : "#ff3355" }}>
+                {signalStats.avg_sell_avoided <= 0 ? "" : "+"}{signalStats.avg_sell_avoided}%
+              </span>
+            </div>
+          </div>
+          {signalStats.best_signal && signalStats.worst_signal && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border-dim)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+              <div>
+                <span style={{ color: "var(--text-dim)" }}>Best:</span>{" "}
+                <span style={{ color: signalStats.best_signal.verdict === "BUY" ? "#00ff88" : "#ff3355" }}>
+                  {signalStats.best_signal.verdict}
+                </span>{" "}
+                on {signalStats.best_signal.date} →{" "}
+                <span style={{ color: "#00ff88" }}>+{signalStats.best_signal.forward_5d_return}%</span>
+              </div>
+              <div>
+                <span style={{ color: "var(--text-dim)" }}>Worst:</span>{" "}
+                <span style={{ color: signalStats.worst_signal.verdict === "BUY" ? "#00ff88" : "#ff3355" }}>
+                  {signalStats.worst_signal.verdict}
+                </span>{" "}
+                on {signalStats.worst_signal.date} →{" "}
+                <span style={{ color: "#ff3355" }}>{signalStats.worst_signal.forward_5d_return}%</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Signal loading */}
+      {showSignalHistory && signalLoading && (
+        <div style={{
+          background: "var(--bg-raised)", borderTop: "1px solid var(--border-dim)",
+          padding: "12px", display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}>
+          <span className="pixel-loader" />
+        </div>
+      )}
     </div>
   )
 }

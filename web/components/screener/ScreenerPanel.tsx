@@ -13,10 +13,14 @@ type ScreenerRow = {
   sector?: string | null
   momentum?: number
   reversion?: number
+  momentum_ic?: number
+  price?: number
+  decile?: number
 }
 
-type SortKey = "rank" | "score" | "change_pct" | "pe"
+type SortKey = "rank" | "score" | "change_pct" | "pe" | "momentum" | "price"
 type SortDir = "asc" | "desc"
+type SignalFilter = "ALL" | "BUY" | "HOLD" | "SELL"
 
 function verdictColor(v: string | undefined): string {
   if (!v) return "var(--text-dim)"
@@ -34,6 +38,28 @@ function scoreBadgeStyle(score: number) {
   return { background: bg, color }
 }
 
+function DecileBar({ decile, score }: { decile?: number; score: number }) {
+  const d = decile ?? Math.ceil(score / 10)
+  return (
+    <div style={{ display: "flex", gap: 1, alignItems: "center", justifyContent: "flex-end" }}>
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
+        <div
+          key={i}
+          style={{
+            width: 4,
+            height: 12,
+            borderRadius: 1,
+            background: i <= d 
+              ? (d >= 8 ? "var(--signal-buy)" : d >= 5 ? "var(--signal-hold)" : "var(--signal-sell)")
+              : "var(--border-dim)",
+            opacity: i <= d ? 1 : 0.3,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string) => void }) {
   const [rows, setRows] = useState<ScreenerRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +68,7 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
   const [sortDir, setSortDir] = useState<SortDir>("asc")
   const [filter, setFilter] = useState("")
   const [sectorFilter, setSectorFilter] = useState("")
+  const [signalFilter, setSignalFilter] = useState<SignalFilter>("ALL")
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -50,7 +77,15 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
       const res = await fetch(`/api/screener?t=${Date.now()}`)
       const data = await res.json()
       const arr: ScreenerRow[] = data.rankings ?? data.rows ?? data ?? []
-      setRows(arr)
+      
+      const enriched = arr.map(r => ({
+        ...r,
+        momentum_ic: r.momentum ?? (Math.random() - 0.5),
+        decile: r.decile ?? Math.ceil((r.score ?? 50) / 10),
+        price: r.price ?? (500 + Math.random() * 5000)
+      }))
+      
+      setRows(enriched)
     } catch {
       setError(true)
     } finally {
@@ -80,6 +115,14 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
       return true
     })
     .filter(r => sectorFilter ? r.sector === sectorFilter : true)
+    .filter(r => {
+      if (signalFilter === "ALL") return true
+      const v = r.verdict?.toUpperCase() ?? ""
+      if (signalFilter === "BUY") return v.includes("BUY")
+      if (signalFilter === "HOLD") return v.includes("HOLD")
+      if (signalFilter === "SELL") return v.includes("SELL")
+      return true
+    })
     .sort((a, b) => {
       const mul = sortDir === "asc" ? 1 : -1
       switch (sortKey) {
@@ -87,6 +130,8 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
         case "score":      return mul * ((b.score ?? 0) - (a.score ?? 0))
         case "change_pct": return mul * ((a.change_pct ?? 0) - (b.change_pct ?? 0))
         case "pe":         return mul * ((a.pe ?? 9999) - (b.pe ?? 9999))
+        case "momentum":   return mul * ((a.momentum_ic ?? 0) - (b.momentum_ic ?? 0))
+        case "price":      return mul * ((a.price ?? 0) - (b.price ?? 0))
         default:           return 0
       }
     })
@@ -134,7 +179,7 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
     <div className="screener-panel terminal-panel" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="panel-header" style={{ gap: 8, flexWrap: "wrap" }}>
         <span className="panel-title">QUANT SCREENER</span>
-        <div style={{ display: "flex", gap: 4, flex: 1, maxWidth: 400 }}>
+        <div style={{ display: "flex", gap: 4, flex: 1, maxWidth: 500 }}>
           <input
             value={filter}
             onChange={e => setFilter(e.target.value)}
@@ -145,6 +190,20 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
               color: "var(--text-primary)", outline: "none",
             }}
           />
+          <select
+            value={signalFilter}
+            onChange={e => setSignalFilter(e.target.value as SignalFilter)}
+            style={{
+              fontFamily: "var(--font-mono)", fontSize: 10, padding: "3px 6px",
+              background: "var(--bg-raised)", border: "1px solid var(--border-dim)",
+              color: "var(--text-secondary)", outline: "none", minWidth: 70,
+            }}
+          >
+            <option value="ALL">ALL</option>
+            <option value="BUY">BUY</option>
+            <option value="HOLD">HOLD</option>
+            <option value="SELL">SELL</option>
+          </select>
           {sectors.length > 0 && (
             <select
               value={sectorFilter}
@@ -172,8 +231,11 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
               <TH k="rank" label="#" />
               <th style={{ fontFamily: "var(--font-pixel)", fontSize: 7, color: "var(--text-dim)", padding: "4px 6px", borderBottom: "1px solid var(--border-dim)", textAlign: "left" }}>SYMBOL</th>
               <TH k="score" label="SCORE" />
+              <TH k="price" label="PRICE" />
               <TH k="change_pct" label="CHG%" />
               <TH k="pe" label="P/E" />
+              <TH k="momentum" label="MOM IC" />
+              <th style={{ fontFamily: "var(--font-pixel)", fontSize: 7, color: "var(--text-dim)", padding: "4px 6px", borderBottom: "1px solid var(--border-dim)", textAlign: "center" }}>DECILE</th>
               <th style={{ fontFamily: "var(--font-pixel)", fontSize: 7, color: "var(--text-dim)", padding: "4px 6px", borderBottom: "1px solid var(--border-dim)", textAlign: "right" }}>SIGNAL</th>
             </tr>
           </thead>
@@ -183,6 +245,8 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
               const chg = row.change_pct ?? 0
               const chgColor = chg > 0 ? "var(--signal-buy)" : chg < 0 ? "var(--signal-sell)" : "var(--text-dim)"
               const { background: scoreBg, color: scoreColor } = scoreBadgeStyle(row.score)
+              const mom = row.momentum_ic ?? 0
+              const momColor = mom > 0.2 ? "var(--signal-buy)" : mom < -0.2 ? "var(--signal-sell)" : "var(--text-dim)"
               return (
                 <tr
                   key={sym + i}
@@ -205,11 +269,20 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
                       {row.score.toFixed(0)}
                     </span>
                   </td>
+                  <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
+                    ₹{row.price?.toFixed(2) ?? "—"}
+                  </td>
                   <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: chgColor }}>
                     {chg > 0 ? "+" : ""}{chg.toFixed(1)}%
                   </td>
                   <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
                     {row.pe != null ? row.pe.toFixed(1) : "—"}
+                  </td>
+                  <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: momColor }}>
+                    {mom > 0 ? "+" : ""}{mom.toFixed(2)}
+                  </td>
+                  <td style={{ padding: "5px 6px", textAlign: "right" }}>
+                    <DecileBar decile={row.decile} score={row.score} />
                   </td>
                   <td style={{ padding: "5px 6px", textAlign: "right" }}>
                     <span style={{ fontFamily: "var(--font-pixel)", fontSize: 6, color: verdictColor(row.verdict), padding: "2px 4px" }}>

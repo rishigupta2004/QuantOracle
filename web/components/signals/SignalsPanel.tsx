@@ -35,6 +35,15 @@ type SignalData = {
     week_52_low?: number | null
     sector?: string | null
   } | null
+  price?: number
+  lastUpdated?: string
+}
+
+type SignalAccuracy = {
+  hitRate: number
+  avgReturnBuy: number
+  avgAvoidedSell: number
+  totalSignals: number
 }
 
 function formatINR(value: number, decimals = 2): string {
@@ -53,7 +62,6 @@ function formatMarketCap(v: number | null | undefined, fmt?: string | null): str
   return `₹${v.toLocaleString("en-IN")}`
 }
 
-// Human-readable signal insight per category
 function trendInsight(signal: SignalData): string {
   const adx = signal.adx
   if (adx < 20) return `ADX ${adx.toFixed(0)} — sideways market. Trend signals unreliable.`
@@ -84,60 +92,45 @@ function volumeInsight(signal: SignalData): string {
   return `Volume normal. No unusual activity.`
 }
 
-// Signal bar: -1 to +1 scale, center = 0
-function SignalBar({ value, label, insight }: { value: number; label: string; insight: string }) {
-  // value is -1 to +1, bar width from center
-  const pct = Math.abs(value) * 50
-  const isBull = value >= 0
-  const labelColor = isBull ? "var(--signal-buy)" : value < 0 ? "var(--signal-sell)" : "var(--text-dim)"
-  return (
-    <div style={{ marginBottom: 8, padding: "6px 8px", background: "var(--bg-dim)", borderRadius: 3 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <span style={{ fontSize: 8, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</span>
-        <span style={{ fontSize: 9, color: labelColor }}>{getStatusLabel(label, value)}</span>
-      </div>
-      {/* Center-zero bar */}
-      <div style={{ height: 4, background: "var(--bg-panel)", borderRadius: 2, position: "relative", marginBottom: 4 }}>
-        <div style={{ position: "absolute", left: "50%", top: 0, width: 1, height: "100%", background: "var(--border-bright)" }} />
-        {value < 0 ? (
-          <div style={{
-            position: "absolute", right: "50%", top: 0, height: "100%",
-            width: `${pct}%`, background: "var(--signal-sell)", borderRadius: "2px 0 0 2px",
-          }} />
-        ) : (
-          <div style={{
-            position: "absolute", left: "50%", top: 0, height: "100%",
-            width: `${pct}%`, background: "var(--signal-buy)", borderRadius: "0 2px 2px 0",
-          }} />
-        )}
-      </div>
-      <div style={{ fontSize: 8, color: "var(--text-dim)", lineHeight: 1.4 }}>{insight}</div>
-    </div>
-  )
+const CATEGORY_COLORS = {
+  TREND: "#c8ff00",
+  MOMENTUM: "#00ccff",
+  REVERSION: "#cc00ff",
+  VOLUME: "#ff8800",
 }
 
-function getStatusLabel(cat: string, value: number): string {
-  if (cat === "TREND") {
-    if (value > 0.3) return "TRENDING UP ↑"
-    if (value < -0.3) return "TRENDING DOWN ↓"
-    return "SIDEWAYS →"
-  }
-  if (cat === "MOMENTUM") {
-    if (value > 0.4) return "BULLISH"
-    if (value < -0.4) return "BEARISH"
-    return "NEUTRAL"
-  }
-  if (cat === "REVERSION") {
-    if (value > 0.3) return "OVERSOLD"
-    if (value < -0.3) return "OVERBOUGHT"
-    return "NEUTRAL"
-  }
-  if (cat === "VOLUME") {
-    if (value > 0.3) return "SURGE"
-    if (value < -0.3) return "LOW"
-    return "NORMAL"
-  }
-  return ""
+function SignalBar({ value, label, insight }: { value: number; label: string; insight: string }) {
+  const color = CATEGORY_COLORS[label as keyof typeof CATEGORY_COLORS] || "#888"
+  const isPositive = value >= 0
+  const position = 50 + (value * 50)
+
+  return (
+    <div style={{ marginBottom: 12, padding: "8px 10px", background: "var(--bg-dim)", borderRadius: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 9, color: color, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 10, color: isPositive ? "var(--signal-buy)" : "var(--signal-sell)", fontFamily: "var(--font-mono)" }}>
+          {value > 0 ? "+" : ""}{value.toFixed(2)}
+        </span>
+      </div>
+      <div style={{ height: 6, background: "var(--bg-panel)", borderRadius: 3, position: "relative", overflow: "hidden", marginBottom: 6 }}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: "50%", height: "100%", background: "linear-gradient(90deg, rgba(239,68,68,0.4), transparent)", borderRadius: "3px 0 0 3px" }} />
+        <div style={{ position: "absolute", right: 0, top: 0, width: "50%", height: "100%", background: "linear-gradient(90deg, transparent, rgba(34,197,94,0.4))", borderRadius: "0 3px 3px 0" }} />
+        <div style={{ position: "absolute", left: "50%", top: 0, width: 1, height: "100%", background: "var(--text-dim)", opacity: 0.5 }} />
+        <div style={{
+          position: "absolute",
+          left: `${position}%`,
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background: color,
+          boxShadow: `0 0 8px ${color}, 0 0 2px white`,
+        }} />
+      </div>
+      <div style={{ fontSize: 9, color: "var(--text-dim)", lineHeight: 1.4 }}>{insight}</div>
+    </div>
+  )
 }
 
 function signalValue(signal: SignalData, cat: string): number {
@@ -164,12 +157,138 @@ function signalValue(signal: SignalData, cat: string): number {
   }
 }
 
+function PriceRuler({ current, low, high, isNSE }: { current: number; low: number; high: number; isNSE: boolean }) {
+  const range = high - low
+  const currentPos = range > 0 ? ((current - low) / range) * 100 : 50
+
+  const format = (v: number) => isNSE ? `₹${Math.round(v).toLocaleString("en-IN")}` : `$${v.toFixed(2)}`
+
+  return (
+    <div style={{ position: "relative", padding: "8px 0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 7, color: "var(--text-dim)", marginBottom: 4 }}>
+        <span>{format(low)}</span>
+        <span>{format(high)}</span>
+      </div>
+      <div style={{ height: 8, background: "var(--bg-panel)", borderRadius: 4, position: "relative", overflow: "visible" }}>
+        <div style={{
+          position: "absolute",
+          left: `${currentPos}%`,
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          width: 16,
+          height: 16,
+          borderRadius: "50%",
+          background: "var(--text-accent)",
+          border: "3px solid var(--bg-void)",
+          boxShadow: "0 0 10px var(--text-accent)",
+          zIndex: 2,
+        }} />
+        <div style={{
+          position: "absolute",
+          left: 0,
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: `${currentPos}%`,
+          height: "100%",
+          background: "linear-gradient(90deg, var(--signal-buy), var(--text-accent))",
+          borderRadius: "4px 0 0 4px",
+        }} />
+        <div style={{
+          position: "absolute",
+          left: `${currentPos}%`,
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: `${100 - currentPos}%`,
+          height: "100%",
+          background: "var(--signal-sell)",
+          borderRadius: "0 4px 4px 0",
+          opacity: 0.6,
+        }} />
+      </div>
+      <div style={{
+        position: "absolute",
+        left: `${currentPos}%`,
+        top: 0,
+        transform: "translateX(-50%)",
+        fontSize: 8,
+        fontFamily: "var(--font-mono)",
+        color: "var(--text-accent)",
+        fontWeight: 600,
+      }}>
+        {format(current)}
+      </div>
+    </div>
+  )
+}
+
+function AccuracySection({ accuracy, onViewHistory }: { accuracy: SignalAccuracy | null; onViewHistory: () => void }) {
+  return (
+    <div style={{ marginBottom: 10, padding: 10, background: "var(--bg-dim)", borderRadius: 4, border: "1px solid var(--border-dim)" }}>
+      <div style={{ fontSize: 8, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Signal Accuracy</div>
+      
+      {accuracy ? (
+        <>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontSize: 9, color: "var(--text-secondary)" }}>Hit Rate</span>
+              <span style={{ fontSize: 9, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{(accuracy.hitRate * 100).toFixed(1)}%</span>
+            </div>
+            <div style={{ height: 6, background: "var(--bg-panel)", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ width: `${accuracy.hitRate * 100}%`, height: "100%", background: "linear-gradient(90deg, #22c55e, #4ade80)", borderRadius: 3 }} />
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <div style={{ padding: 6, background: "var(--bg-panel)", borderRadius: 3 }}>
+              <div style={{ fontSize: 7, color: "var(--text-dim)", marginBottom: 2 }}>Avg Return (BUY)</div>
+              <div style={{ fontSize: 11, color: "var(--signal-buy)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+                +{accuracy.avgReturnBuy.toFixed(1)}%
+              </div>
+            </div>
+            <div style={{ padding: 6, background: "var(--bg-panel)", borderRadius: 3 }}>
+              <div style={{ fontSize: 7, color: "var(--text-dim)", marginBottom: 2 }}>Avg Avoided (SELL)</div>
+              <div style={{ fontSize: 11, color: "var(--signal-sell)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+                {accuracy.avgAvoidedSell.toFixed(1)}%
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={onViewHistory}
+            style={{
+              width: "100%",
+              fontSize: 9,
+              fontFamily: "var(--font-pixel)",
+              color: "var(--text-accent)",
+              background: "transparent",
+              border: "1px solid var(--text-accent)",
+              padding: "6px 10px",
+              borderRadius: 3,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => { (e.target as HTMLElement).style.background = "var(--text-accent)"; (e.target as HTMLElement).style.color = "var(--bg-void)" }}
+            onMouseLeave={e => { (e.target as HTMLElement).style.background = "transparent"; (e.target as HTMLElement).style.color = "var(--text-accent)" }}
+          >
+            ◉ VIEW FULL HISTORY ON CHART
+          </button>
+        </>
+      ) : (
+        <div style={{ fontSize: 9, color: "var(--text-dim)", fontStyle: "italic" }}>No historical data available</div>
+      )}
+    </div>
+  )
+}
+
 export function SignalsPanel({ symbol }: { symbol: string }) {
   const [signal, setSignal] = useState<SignalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [explaining, setExplaining] = useState(false)
   const [explanation, setExplanation] = useState("")
   const [error, setError] = useState(false)
+  const [accuracy, setAccuracy] = useState<SignalAccuracy | null>(null)
+
+  const isFresh = signal?.lastUpdated && (Date.now() - new Date(signal.lastUpdated).getTime()) < 5 * 60 * 1000
 
   useEffect(() => {
     const fetchSignal = async () => {
@@ -179,7 +298,12 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
       try {
         const res = await fetch(`/api/signals/${encodeURIComponent(symbol)}?t=${Date.now()}`)
         const data = await res.json()
-        if (data.signal) setSignal(data.signal)
+        if (data.signal) {
+          setSignal(data.signal)
+          if (data.signal.accuracy) {
+            setAccuracy(data.signal.accuracy)
+          }
+        }
         else setError(true)
       } catch {
         setError(true)
@@ -214,19 +338,18 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
   const screenerLink = `https://www.screener.in/company/${symBase}/`
   const tickertapeLink = `https://www.tickertape.in/stocks/${symBase.toLowerCase()}`
   const mcLink = `https://www.moneycontrol.com/india/stockpricequote/${symBase.toLowerCase()}/${symBase.toLowerCase()}`
+  const deepDiveLink = `/stock/${symBase}`
 
   const verdictColor = signal?.verdict === "BUY" ? "var(--signal-buy)" : signal?.verdict === "SELL" ? "var(--signal-sell)" : "var(--signal-hold)"
 
-  // Get 52W data from fundamentals
   const w52High = signal?.fundamentals?.week_52_high
   const w52Low = signal?.fundamentals?.week_52_low
-  const currentPrice = signal?.vwap  // proxy for current price
-
-  const range52w = w52High && w52Low && w52High > w52Low
-    ? ((currentPrice ?? w52Low) - w52Low) / (w52High - w52Low)
-    : null
-
+  const currentPrice = signal?.price || signal?.vwap
   const isNSE = symbol.endsWith(".NS") || symbol.endsWith(".BO")
+
+  const range52w = w52High && w52Low && w52High > w52Low && currentPrice
+    ? (currentPrice - w52Low) / (w52High - w52Low)
+    : null
 
   if (loading) {
     return (
@@ -254,39 +377,100 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
     )
   }
 
-  // Fundamentals
   const fd = signal.fundamentals
   const hasFundamentals = fd && (fd.pe_ratio || fd.pb_ratio || fd.roe || fd.market_cap || fd.debt_to_equity)
 
   return (
     <div className="signals-panel terminal-panel" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <style>{`
+        @keyframes verdict-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+          50% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+        }
+        @keyframes price-flash {
+          0% { background-color: rgba(34, 197, 94, 0.3); }
+          100% { background-color: transparent; }
+        }
+      `}</style>
+      
       <div className="panel-header">
         <span className="panel-title">SIGNALS</span>
         {fd?.sector && <span style={{ fontSize: 8, color: "var(--text-dim)" }}>{fd.sector}</span>}
       </div>
-      <div className="panel-content" style={{ flex: 1, overflow: "auto", padding: 8 }}>
+      <div className="panel-content" style={{ flex: 1, overflow: "auto", padding: 10 }}>
 
-        {/* ── VERDICT BLOCK ── */}
-        <div style={{ marginBottom: 10, padding: "10px", background: "var(--bg-dim)", borderRadius: 4, borderLeft: `3px solid ${verdictColor}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-            <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontWeight: 600 }}>{symbol}</span>
-            <span className={`pixel-badge signal-${signal.verdict.toLowerCase()}`} style={{ fontSize: 9, padding: "4px 10px" }}>
-              {signal.verdict} {signal.score > 0 ? "+" : ""}{signal.score.toFixed(2)}
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 9, color: "var(--text-dim)" }}>Confidence</span>
-            <div style={{ flex: 1, height: 5, background: "var(--bg-panel)", borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ width: `${signal.confidence}%`, height: "100%", background: verdictColor, transition: "width 0.5s" }} />
+        {/* ── LIVE HEADER SECTION ── */}
+        <div style={{ 
+          marginBottom: 12, 
+          padding: 12, 
+          background: "var(--bg-dim)", 
+          borderRadius: 6, 
+          borderLeft: `4px solid ${verdictColor}`,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "1px", fontFamily: "var(--font-mono)" }}>
+                {symbol}
+              </div>
+              {fd?.sector && (
+                <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 2 }}>{fd.sector}</div>
+              )}
             </div>
-            <span style={{ fontSize: 9, color: verdictColor }}>{signal.confidence}%</span>
+            <div
+              className="verdict-badge"
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                padding: "6px 14px",
+                borderRadius: 4,
+                background: verdictColor,
+                color: verdictColor === "var(--signal-buy)" || verdictColor === "var(--signal-sell)" ? "#000" : "var(--text-primary)",
+                animation: isFresh ? "verdict-pulse 2s ease-in-out infinite" : "none",
+                boxShadow: isFresh ? `0 0 12px ${verdictColor}` : "none",
+              }}
+            >
+              {signal.verdict}
+            </div>
           </div>
+
+          {currentPrice && (
+            <div style={{
+              fontSize: 18,
+              fontFamily: "var(--font-mono)",
+              color: "var(--text-accent)",
+              marginBottom: 10,
+            }}>
+              {isNSE ? formatINR(currentPrice) : `$${currentPrice.toFixed(2)}`}
+            </div>
+          )}
+
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontSize: 9, color: "var(--text-dim)" }}>Confidence</span>
+              <span style={{ fontSize: 10, color: verdictColor, fontFamily: "var(--font-mono)" }}>{signal.confidence}%</span>
+            </div>
+            <div style={{ height: 8, background: "var(--bg-panel)", borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ 
+                width: `${signal.confidence}%`, 
+                height: "100%", 
+                background: `linear-gradient(90deg, ${verdictColor}, ${verdictColor}dd)`,
+                borderRadius: 4,
+                transition: "width 0.5s ease-out",
+              }} />
+            </div>
+          </div>
+
           <button
             onClick={handleExplain} disabled={explaining}
             style={{
-              background: "transparent", border: "1px solid var(--border-dim)",
+              background: "transparent", 
+              border: "1px solid var(--border-dim)",
               color: explaining ? "var(--text-accent)" : "var(--text-secondary)",
-              fontSize: 8, fontFamily: "var(--font-pixel)", padding: "3px 8px", cursor: "pointer",
+              fontSize: 8, 
+              fontFamily: "var(--font-pixel)", 
+              padding: "4px 10px", 
+              cursor: "pointer",
+              marginTop: 8,
             }}
           >
             {explaining ? "◎ Analyzing..." : "◎ EXPLAIN THIS SIGNAL"}
@@ -298,21 +482,23 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
           )}
         </div>
 
-        {/* ── SIGNAL BREAKDOWN ── */}
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 8, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>Signal Breakdown</div>
+        {/* ── SIGNAL BARS ── */}
+        <div style={{ marginBottom: 12 }}>
           <SignalBar value={signalValue(signal, "TREND")} label="TREND" insight={trendInsight(signal)} />
           <SignalBar value={signalValue(signal, "MOMENTUM")} label="MOMENTUM" insight={momentumInsight(signal)} />
           <SignalBar value={signalValue(signal, "REVERSION")} label="REVERSION" insight={reversionInsight(signal)} />
           <SignalBar value={signalValue(signal, "VOLUME")} label="VOLUME" insight={volumeInsight(signal)} />
         </div>
 
-        {/* ── KEY LEVELS ── */}
-        <div style={{ marginBottom: 10, padding: 8, background: "var(--bg-dim)", borderRadius: 4 }}>
+        {/* ── KEY LEVELS VISUAL ── */}
+        <div style={{ marginBottom: 12, padding: 10, background: "var(--bg-dim)", borderRadius: 4 }}>
           <div style={{ fontSize: 8, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Key Levels</div>
+          
+          {currentPrice && w52High && w52Low && (
+            <PriceRuler current={currentPrice} low={w52Low} high={w52High} isNSE={isNSE} />
+          )}
 
-          {/* VWAP comparison */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 10, fontFamily: "var(--font-mono)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, marginBottom: 6, fontSize: 10, fontFamily: "var(--font-mono)" }}>
             <span style={{ color: "var(--text-dim)" }}>VWAP</span>
             <span style={{ color: "var(--text-primary)" }}>{isNSE ? formatINR(signal.vwap) : `$${signal.vwap.toFixed(2)}`}</span>
           </div>
@@ -321,7 +507,6 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
             <span style={{ color: "var(--text-primary)" }}>{isNSE ? formatINR(signal.atr) : `$${signal.atr.toFixed(2)}`}</span>
           </div>
 
-          {/* 52W Range */}
           {w52High && w52Low && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 8, color: "var(--text-dim)", marginBottom: 4 }}>52W Range</div>
@@ -344,47 +529,14 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
           )}
         </div>
 
-        {/* ── FUNDAMENTALS ── */}
-        {hasFundamentals ? (
-          <div style={{ marginBottom: 10, padding: 8, background: "var(--bg-dim)", borderRadius: 4 }}>
-            <div style={{ fontSize: 8, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Fundamentals</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {fd?.pe_ratio != null && (
-                <FundRow label="P/E Ratio" value={`${fd.pe_ratio.toFixed(1)}×`} />
-              )}
-              {fd?.pb_ratio != null && (
-                <FundRow label="P/B Ratio" value={`${fd.pb_ratio.toFixed(1)}×`} />
-              )}
-              {fd?.roe && (
-                <FundRow label="ROE" value={fd.roe} />
-              )}
-              {fd?.debt_to_equity != null && (
-                <FundRow
-                  label="D/E Ratio"
-                  value={fd.debt_to_equity.toFixed(2)}
-                  badge={fd.debt_to_equity < 0.5 ? "LOW LEVERAGE" : fd.debt_to_equity > 2 ? "HIGH LEVERAGE" : undefined}
-                  badgeColor={fd.debt_to_equity < 0.5 ? "var(--signal-buy)" : "var(--signal-sell)"}
-                />
-              )}
-              {fd?.market_cap != null && (
-                <FundRow label="Mkt Cap" value={formatMarketCap(fd.market_cap, fd.market_cap_fmt)} />
-              )}
-              {fd?.revenue && (
-                <FundRow label="Revenue TTM" value={fd.revenue} />
-              )}
-              {fd?.profit_margin && (
-                <FundRow label="Net Margin" value={fd.profit_margin} />
-              )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ marginBottom: 10, padding: 8, background: "var(--bg-dim)", borderRadius: 4, fontSize: 9, color: "var(--text-dim)", fontStyle: "italic" }}>
-            Fundamentals unavailable
-          </div>
-        )}
+        {/* ── SIGNAL ACCURACY MINI ── */}
+        <AccuracySection 
+          accuracy={accuracy} 
+          onViewHistory={() => window.location.href = deepDiveLink}
+        />
 
-        {/* ── QUICK LINKS ── */}
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {/* ── QUICK LINKS + DEEP DIVE ── */}
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
           {[
             { label: "↗ NSE", href: nseLink },
             { label: "↗ SCREENER", href: screenerLink },
@@ -405,23 +557,26 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
           ))}
         </div>
 
-      </div>
-    </div>
-  )
-}
+        <a
+          href={deepDiveLink}
+          style={{
+            display: "block",
+            textAlign: "center",
+            fontSize: 10,
+            fontFamily: "var(--font-pixel)",
+            color: "var(--text-accent)",
+            padding: "8px 12px",
+            border: "1px solid var(--text-accent)",
+            borderRadius: 4,
+            textDecoration: "none",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={e => { (e.target as HTMLElement).style.background = "var(--text-accent)"; (e.target as HTMLElement).style.color = "var(--bg-void)" }}
+          onMouseLeave={e => { (e.target as HTMLElement).style.background = "transparent"; (e.target as HTMLElement).style.color = "var(--text-accent)" }}
+        >
+          ▶ DEEP DIVE →
+        </a>
 
-function FundRow({ label, value, badge, badgeColor }: { label: string; value: string; badge?: string; badgeColor?: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, fontFamily: "var(--font-mono)" }}>
-      <span style={{ color: "var(--text-dim)" }}>{label}</span>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ color: "var(--text-primary)" }}>{value}</span>
-        {badge && (
-          <span style={{
-            fontSize: 7, fontFamily: "var(--font-pixel)", color: badgeColor,
-            border: `1px solid ${badgeColor}`, padding: "1px 4px",
-          }}>{badge}</span>
-        )}
       </div>
     </div>
   )

@@ -106,11 +106,39 @@
   height: 100vh;
   overflow: hidden;
   background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+.terminal-header-zone {
+  flex-shrink: 0;
+}
+
+.terminal-body {
+  flex: 1;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 1fr 220px;
+}
+
+.terminal-main-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 340px;
+  overflow: hidden;
+  gap: 1px;
+  background: var(--border-dim);
+}
+
+.terminal-bottom-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border-dim);
+  overflow: hidden;
 }
 
 .terminal-grid-research {
   display: grid;
-  grid-template-columns: 200px 1fr 320px;
+  grid-template-columns: 200px 1fr 340px;
   grid-template-rows: 1fr 200px;
   flex: 1;
   overflow: hidden;
@@ -340,6 +368,27 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.terminal-panel-header {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-dim);
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--text-accent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.terminal-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-bright) transparent;
 }
 
 .panel-header {
@@ -652,6 +701,139 @@
 .macro-impact.low {
   color: var(--text-dim);
   border: 1px solid var(--text-dim);
+}
+
+/* Macro Calendar Redesign */
+.macro-events-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.macro-events-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.macro-events-container::-webkit-scrollbar-track {
+  background: var(--bg-panel);
+}
+
+.macro-events-container::-webkit-scrollbar-thumb {
+  background: var(--border-dim);
+}
+
+.macro-group {
+  margin-bottom: 16px;
+}
+
+.macro-group-header {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--text-accent);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.macro-banner {
+  background: linear-gradient(90deg, rgba(255, 51, 85, 0.15), rgba(255, 51, 85, 0.05));
+  border: 1px solid var(--signal-sell);
+  padding: 8px;
+  margin-bottom: 12px;
+}
+
+.macro-banner-label {
+  font-family: var(--font-pixel);
+  font-size: 6px;
+  color: var(--signal-sell);
+  margin-bottom: 4px;
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0.5; }
+}
+
+.macro-banner-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.macro-banner-event {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.macro-banner-countdown {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--signal-sell);
+}
+
+.macro-event-row {
+  padding: 8px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid var(--border-dim);
+  transition: border-color 0.2s;
+}
+
+.macro-event-row:hover {
+  border-left-color: var(--text-accent);
+}
+
+.macro-event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.macro-event-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.macro-event-impact {
+  font-family: var(--font-pixel);
+  font-size: 6px;
+  padding: 2px 4px;
+  border: 1px solid;
+}
+
+.macro-event-date {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.macro-event-sectors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.macro-sector-tag {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  padding: 2px 5px;
+  border: 1px solid;
+}
+
+.macro-event-hist {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--signal-buy);
+}
+
+.macro-hist-icon {
+  margin-right: 4px;
 }
 
 /* Geo News Panel */

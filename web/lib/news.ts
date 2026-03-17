@@ -383,69 +383,68 @@ async function fromNewsData(query: string): Promise<NewsItem[]> {
     return []
   }
   try {
-    // Use broader query for more results
-    const q = query || "stock market OR NSE OR BSE OR Nifty OR Sensex OR RBI OR SEBI OR rupee OR oil price OR Fed rate"
-    const url = new URL(`https://newsdata.io/api/1/news?apikey=${encodeURIComponent(key)}`)
-    url.searchParams.set('language', 'en')
-    url.searchParams.set('q', q)
-    url.searchParams.set('category', 'business,politics,economics')
-    url.searchParams.set('size', '50')  // Get more results
-    url.searchParams.set('country', 'in,us,gb')
+    const searchTerms = query 
+      ? [query] 
+      : ["NSE Nifty", "RBI Fed", "stocks India", "IPO earnings", "stock market OR NSE OR BSE OR Nifty OR Sensex OR RBI OR SEBI OR rupee OR oil price OR Fed rate"]
     
-    const r = await fetchWithTimeout(url.toString(), 6500)
-    if (!r.ok) {
-      return []
+    const fetchForTerm = async (term: string): Promise<NewsItem[]> => {
+      const url = new URL(`https://newsdata.io/api/1/news?apikey=${encodeURIComponent(key)}`)
+      url.searchParams.set('language', 'en')
+      url.searchParams.set('q', term)
+      url.searchParams.set('category', 'business,politics,economics')
+      url.searchParams.set('size', '50')
+      url.searchParams.set('country', 'in,us,gb')
+      
+      const r = await fetchWithTimeout(url.toString(), 6500)
+      if (!r.ok) return []
+      const data = (await r.json()) as { results?: Array<Record<string, unknown>> }
+      
+      const MARKET_KEYWORDS = [
+        'nifty', 'sensex', 'nse', 'bse', 'sebi', 'rbi', 'rupee', 'inr',
+        'fii', 'dii', 'ipo', 'india', 'reliance', 'tcs', 'hdfc', 'infosys',
+        'wipro', 'adani', 'tata', 'bajaj', 'icici', 'kotak', 'stock', 'share',
+        'equity', 'market', 'trading', 'invest', 'fund', 'mutual', 'portfolio',
+        'oil', 'crude', 'gold', 'dollar', 'fed', 'rate', 'inflation', 'gdp',
+      ]
+      
+      const isRelevant = (item: any) => {
+        const text = (
+          (item.title ?? '') + ' ' + 
+          (item.description ?? '') + ' ' +
+          (item.content ?? '')
+        ).toLowerCase()
+        return MARKET_KEYWORDS.some(kw => text.includes(kw))
+      }
+      
+      return (data.results ?? []).map((n) => ({
+        headline: String(n.title ?? "Untitled"),
+        summary: String(n.description ?? ""),
+        url: String(n.link ?? "#"),
+        source: String(n.source_id ?? "NewsData"),
+        datetime: String(n.pubDate ?? "Recent"),
+        content: String(n.content ?? ""),
+      })).filter(isRelevant)
     }
-    const data = (await r.json()) as { results?: Array<Record<string, unknown>> }
     
-    // Market keywords for filtering
-    const MARKET_KEYWORDS = [
-      'nifty', 'sensex', 'nse', 'bse', 'sebi', 'rbi', 'rupee', 'inr',
-      'fii', 'dii', 'ipo', 'india', 'reliance', 'tcs', 'hdfc', 'infosys',
-      'wipro', 'adani', 'tata', 'bajaj', 'icici', 'kotak', 'stock', 'share',
-      'equity', 'market', 'trading', 'invest', 'fund', 'mutual', 'portfolio',
-      'oil', 'crude', 'gold', 'dollar', 'fed', 'rate', 'inflation', 'gdp',
-    ]
+    const allResults = await Promise.all(searchTerms.map(fetchForTerm))
+    const combined = allResults.flat()
     
-    const isRelevant = (item: any) => {
-      const text = (
-        (item.title ?? '') + ' ' + 
-        (item.description ?? '') + ' ' +
-        (item.content ?? '')
-      ).toLowerCase()
-      return MARKET_KEYWORDS.some(kw => text.includes(kw))
-    }
+    const seen = new Set<string>()
+    const deduplicated = combined.filter(item => {
+      const key = (item.headline + item.url).toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
     
-    const articles = (data.results ?? []).map((n) => ({
-      title: String(n.title ?? "Untitled"),
-      link: String(n.link ?? "#"),
-      pubDate: String(n.pubDate ?? "Recent"),
-      source_id: String(n.source_id ?? "NewsData"),
-      description: String(n.description ?? ""),
-      content: String(n.content ?? ""),
-    }))
+    const relevant = deduplicated.slice(0, 30)
     
-    // Filter for relevant articles
-    const relevant = articles.filter(isRelevant).slice(0, 20)
-    
-    // If fewer than 5 relevant, show top from all
     if (relevant.length < 5) {
-      return articles.slice(0, 10).map((n) => ({
-        headline: n.title,
-        summary: n.description,
-        url: n.link,
-        source: n.source_id,
-        datetime: n.pubDate,
-      }))
+      const allArticles = combined.slice(0, 15)
+      return allArticles.slice(0, 30)
     }
     
-    return relevant.slice(0, 20).map((n) => ({
-      headline: n.title,
-      summary: n.description,
-      url: n.link,
-      source: n.source_id,
-      datetime: n.pubDate,
-    }))
+    return relevant.slice(0, 30)
   } catch {
     return []
   }
@@ -459,14 +458,14 @@ async function fromTheNewsApi(query: string): Promise<NewsItem[]> {
   try {
     const q = query || "stock market"
     const r = await fetchWithTimeout(
-      `https://api.thenewsapi.com/v1/news/all?api_token=${encodeURIComponent(key)}&language=en&search=${encodeURIComponent(q)}&limit=20`,
+      `https://api.thenewsapi.com/v1/news/all?api_token=${encodeURIComponent(key)}&language=en&search=${encodeURIComponent(q)}&limit=30`,
       6500
     )
     if (!r.ok) {
       return []
     }
     const data = (await r.json()) as { data?: Array<Record<string, unknown>> }
-    return (data.data ?? []).slice(0, 16).map((n) => ({
+    return (data.data ?? []).slice(0, 30).map((n) => ({
       headline: String(n.title ?? "Untitled"),
       summary: clean(String(n.description ?? "")),
       url: String(n.url ?? "#"),
@@ -493,7 +492,7 @@ async function fromGNews(query: string): Promise<NewsItem[]> {
       return []
     }
     const data = (await r.json()) as { articles?: Array<Record<string, unknown>> }
-    return (data.articles ?? []).slice(0, 16).map((n) => {
+    return (data.articles ?? []).slice(0, 30).map((n) => {
       const source = (n.source as Record<string, unknown> | undefined)?.name
       return {
         headline: String(n.title ?? "Untitled"),
@@ -526,7 +525,7 @@ async function fromRss(query: string): Promise<NewsItem[]> {
     }
     const xml = await r.text()
     const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
-    return items.slice(0, 16).map((m) => {
+    return items.slice(0, 30).map((m) => {
       const chunk = m[1]
       return {
         headline: clean(extractTag(chunk, "title")) || "Untitled",
