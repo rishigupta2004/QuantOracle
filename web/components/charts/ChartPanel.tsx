@@ -422,9 +422,6 @@ export function ChartPanel({ symbol }: { symbol: string }) {
   // ─── Signal history overlay ────────────────────────────────────────────────────
   useEffect(() => {
     if (!showSignalHistory) {
-      if (candleSeriesRef.current?.setMarkers) {
-        (candleSeriesRef.current as unknown as { setMarkers: (m: unknown[]) => void }).setMarkers([])
-      }
       setSignalHistory([])
       setSignalStats(null)
       return
@@ -438,21 +435,6 @@ export function ChartPanel({ symbol }: { symbol: string }) {
         if (data.signals) {
           setSignalHistory(data.signals)
           setSignalStats(data.stats)
-          
-          const markers = data.signals.map((s: SignalHistory) => ({
-            time: s.date as Time,
-            position: "aboveBar" as const,
-            color: s.was_correct 
-              ? (s.verdict === "BUY" ? "#00ff88" : "#ff3355")
-              : "#666666",
-            shape: s.verdict === "BUY" ? "arrowUp" : "arrowDown",
-            text: s.verdict === "BUY" 
-              ? (s.was_correct ? "BUY ✓" : "BUY ✗")
-              : (s.was_correct ? "SELL ✓" : "SELL ✗"),
-          }))
-          if (candleSeriesRef.current?.setMarkers) {
-            (candleSeriesRef.current as unknown as { setMarkers: (m: unknown[]) => void }).setMarkers(markers)
-          }
         }
       } catch (err) {
         console.error("Signal history fetch error:", err)
