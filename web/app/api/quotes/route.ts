@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { checkDataRateLimit } from '@/lib/ratelimit'
 
 const SYMBOL_MAP: Record<string, string> = {
   'RELIANCE': 'RELIANCE.NS',
@@ -39,6 +40,15 @@ async function fetchYahooQuote(symbol: string) {
 }
 
 export async function GET(request: NextRequest) {
+  // Rate limit check
+  const rateLimit = checkDataRateLimit('quotes', request)
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: `Rate limit exceeded. Try again in ${rateLimit.resetInSeconds}s`, retryAfter: rateLimit.resetInSeconds },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.resetInSeconds) } }
+    )
+  }
+  
   const { searchParams } = new URL(request.url)
   const symbolsParam = searchParams.get('symbols') ?? 
     'RELIANCE.NS,TCS.NS,HDFCBANK.NS,INFY.NS,ICICIBANK.NS,SBIN.NS,^NSEI,^BSESN'

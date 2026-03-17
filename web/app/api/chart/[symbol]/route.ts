@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { validateSymbol } from '@/lib/validate'
+import { checkDataRateLimit } from '@/lib/ratelimit'
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -196,7 +198,20 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
+  const rateLimit = checkDataRateLimit('chart', req)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: `Rate limit exceeded. Try again in ${rateLimit.resetInSeconds}s`, retryAfter: rateLimit.resetInSeconds },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.resetInSeconds) } }
+    )
+  }
+
   const { symbol } = await params
+  try {
+    validateSymbol(symbol)
+  } catch (e) {
+    return NextResponse.json({ error: 'Invalid symbol' }, { status: 400 })
+  }
   const period = req.nextUrl.searchParams.get("period") || "1y"
   
   const cacheKey = `${symbol}-${period}`

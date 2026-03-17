@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { validateSymbol } from '@/lib/validate'
+import { checkDataRateLimit } from '@/lib/ratelimit'
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -278,6 +280,22 @@ export async function GET(
   { params }: { params: Promise<{ symbol: string }> }
 ) {
   const { symbol } = await params
+  
+  // Rate limit check
+  const rateLimit = checkDataRateLimit('signals', req)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: `Rate limit exceeded. Try again in ${rateLimit.resetInSeconds}s`, retryAfter: rateLimit.resetInSeconds },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.resetInSeconds) } }
+    )
+  }
+
+  // Validate symbol
+  try {
+    validateSymbol(symbol)
+  } catch (e) {
+    return NextResponse.json({ error: 'Invalid symbol' }, { status: 400 })
+  }
   
   const cached = signalsCache.get(symbol)
   if (cached && cached.expires > Date.now()) {

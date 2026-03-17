@@ -1,4 +1,15 @@
-export async function GET() {
+import { checkDataRateLimit } from '@/lib/ratelimit'
+
+export async function GET(request: Request) {
+  // Rate limit check
+  const rateLimit = checkDataRateLimit('screener', request)
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: `Rate limit exceeded. Try again in ${rateLimit.resetInSeconds}s`, retryAfter: rateLimit.resetInSeconds },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.resetInSeconds) } }
+    )
+  }
+
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_BUCKET ?? 'quantoracle-artifacts'

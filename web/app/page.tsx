@@ -5,12 +5,8 @@ import dynamic from 'next/dynamic'
 import { HeaderStrip } from "@/components/shell/HeaderStrip"
 import { CommandPalette } from "@/components/command/CommandPalette"
 import { WatchlistPanel } from "@/components/watchlist/Watchlist"
-import { SignalsPanel } from "@/components/signals/SignalsPanel"
-import { ScreenerPanel } from "@/components/screener/ScreenerPanel"
-import { MacroCalendar } from "@/components/macro/MacroCalendar"
-import { GeoNewsPanel } from "@/components/news/GeoNewsPanel"
-import { PortfolioPanel } from "@/components/portfolio/PortfolioPanel"
 
+// Dynamic imports for heavy components - client-side only
 const ChartPanel = dynamic(
   () => import('@/components/charts/ChartPanel').then(m => ({ default: m.ChartPanel })),
   { 
@@ -30,6 +26,31 @@ const ChartPanel = dynamic(
       </div>
     )
   }
+)
+
+const SignalsPanel = dynamic(
+  () => import('@/components/signals/SignalsPanel').then(m => ({ default: m.SignalsPanel })),
+  { ssr: false }
+)
+
+const ScreenerPanel = dynamic(
+  () => import('@/components/screener/ScreenerPanel').then(m => ({ default: m.ScreenerPanel })),
+  { ssr: false }
+)
+
+const MacroCalendar = dynamic(
+  () => import('@/components/macro/MacroCalendar').then(m => ({ default: m.MacroCalendar })),
+  { ssr: false }
+)
+
+const GeoNewsPanel = dynamic(
+  () => import('@/components/news/GeoNewsPanel').then(m => ({ default: m.GeoNewsPanel })),
+  { ssr: false }
+)
+
+const PortfolioPanel = dynamic(
+  () => import('@/components/portfolio/PortfolioPanel').then(m => ({ default: m.PortfolioPanel })),
+  { ssr: false }
 )
 
 export default function Home() {
