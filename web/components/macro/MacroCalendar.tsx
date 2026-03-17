@@ -423,8 +423,27 @@ export function MacroCalendar() {
   }
   
   return (
-    <div className="macro-panel terminal-panel" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div className="macro-title">MACRO CALENDAR</div>
+    <div className="macro-panel terminal-panel" style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%', 
+      overflow: 'hidden',
+      padding: '8px',
+    }}>
+      <div className="macro-title" style={{ 
+        fontFamily: 'var(--font-pixel)', 
+        fontSize: '8px', 
+        color: 'var(--text-accent)',
+        marginBottom: '8px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <span>MACRO CALENDAR</span>
+        <span style={{fontSize:'7px', color:'var(--text-secondary)'}}>
+          {MACRO_EVENTS.length} events
+        </span>
+      </div>
       
       {nextHighImpact && (
         <div className="macro-banner">
@@ -436,7 +455,11 @@ export function MacroCalendar() {
         </div>
       )}
       
-      <div className="macro-events-container" style={{ overflowY: "auto", flex: 1, maxHeight: "calc(100vh - 200px)" }}>
+      <div className="macro-events-container" style={{
+        flex: 1,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+      }}>
         {grouped.today.length > 0 && (
           <div className="macro-group">
             <div className="macro-group-header">TODAY</div>
@@ -506,7 +529,12 @@ function MacroEventRow({
   const histSummary = getHistoricalSummary(event)
   
   return (
-    <div className="macro-event-row">
+    <div className="macro-event-row" style={{
+      padding: '6px',
+      marginBottom: '4px',
+      background: 'rgba(255, 255, 255, 0.02)',
+      borderLeft: '2px solid var(--border-dim)',
+    }}>
       <div className="macro-event-header">
         <span className="macro-event-name">{event.short}</span>
         <span 

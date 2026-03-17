@@ -658,9 +658,16 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       {/* Signal accuracy stats */}
       {showSignalHistory && signalStats && (
         <div style={{
-          background: "var(--bg-raised)", borderTop: "1px solid var(--border-dim)",
-          padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 10,
-          color: "var(--text-secondary)", flexShrink: 0,
+          background: "rgba(10, 10, 10, 0.97)", 
+          borderTop: "1px solid var(--border-accent)",
+          borderLeft: "2px solid var(--text-accent)",
+          padding: "12px 16px", 
+          fontFamily: "var(--font-mono)", 
+          fontSize: 10,
+          color: "var(--text-secondary)", 
+          flexShrink: 0,
+          backdropFilter: "blur(8px)",
+          boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.5)",
         }}>
           <div style={{ 
             color: "var(--text-accent)", fontSize: 9, fontFamily: "var(--font-pixel)",
@@ -738,8 +745,12 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       {/* Signal loading */}
       {showSignalHistory && signalLoading && (
         <div style={{
-          background: "var(--bg-raised)", borderTop: "1px solid var(--border-dim)",
-          padding: "12px", display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(10, 10, 10, 0.97)", 
+          borderTop: "1px solid var(--border-accent)",
+          padding: "12px", 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center",
           flexShrink: 0,
         }}>
           <span className="pixel-loader" />

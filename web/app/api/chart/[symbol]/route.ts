@@ -8,16 +8,16 @@ export const dynamic = "force-dynamic"
 const chartCache = new Map<string, { data: unknown; expires: number }>()
 
 async function fetchFromYahoo(symbol: string, period: string = "1y") {
-  const intervalMap: Record<string, string> = {
-    "1wk": "15m",
-    "1mo": "1d",
-    "3mo": "1d",
-    "6mo": "1d",
-    "1y": "1d",
-    "2y": "1wk",
-    "5y": "1wk",
-    "max": "1mo"
-  }
+const intervalMap: Record<string, string> = {
+  "1wk": "1d",      // Changed from "15m" - daily candles work better
+  "1mo": "1d",
+  "3mo": "1d",
+  "6mo": "1d",
+  "1y": "1d",
+  "2y": "1wk",
+  "5y": "1wk",
+  "max": "1mo"
+}
 
   const rangeMap: Record<string, string> = {
     "1wk": "5d",
@@ -50,8 +50,16 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
   const json = await res.json()
   const result = json?.chart?.result?.[0]
   
-  if (!result) {
-    throw new Error("No data returned from Yahoo")
+  if (!result || !result.timestamp || result.timestamp.length === 0) {
+    // Return empty data structure instead of throwing
+    return {
+      candles: [],
+      ema21: [],
+      ema55: [],
+      rsi: [],
+      macd_histogram: [],
+      volume: [],
+    }
   }
   
   const timestamps = result.timestamp || []

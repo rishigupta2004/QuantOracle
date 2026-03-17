@@ -318,22 +318,63 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
     if (!signal) return
     setExplaining(true)
     setExplanation("")
+    
     try {
-      const res = await fetch(`/api/ai/signal-explain?symbol=${encodeURIComponent(symbol)}`)
-      const reader = res.body?.getReader()
-      const decoder = new TextDecoder()
-      if (reader) {
-        let text = ""
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          text += decoder.decode(value)
-          setExplanation(text)
+      // Make POST request with signal data as JSON body
+      const res = await fetch('/api/ai/signal-explain', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          symbol: symbol,
+          verdict: signal.verdict,
+          composite_score: signal.score,
+          confidence: signal.confidence / 100,
+          trend: {
+            label: signal.trend,
+            detail: signal.trend === "TRENDING_UP" ? "Price above key moving averages" : 
+                    signal.trend === "TRENDING_DOWN" ? "Price below key moving averages" : "Sideways price action",
+          },
+          momentum: {
+            label: signal.momentum,
+          },
+          reversion: {
+            label: signal.reversion,
+          },
+          volume: {
+            label: signal.volume,
+          },
+          explanation: `Trend: ${signal.trend}, Momentum: ${signal.momentum}, RSI: ${signal.rsi.toFixed(1)}, MACD: ${signal.macd_hist.toFixed(2)}`,
+        }),
+      })
+      
+      if (!res.ok) {
+        throw new Error(`API error: ${res.status}`)
+      }
+      
+      const contentType = res.headers.get('content-type')
+      if (contentType?.includes('text/plain')) {
+        // Fallback response (no AI key)
+        const text = await res.text()
+        setExplanation(text)
+      } else {
+        // Streaming response
+        const reader = res.body?.getReader()
+        const decoder = new TextDecoder()
+        if (reader) {
+          let text = ""
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            text += decoder.decode(value)
+            setExplanation(text)
+          }
         }
       }
     } catch (err) {
       console.error("Explain error:", err)
-      setExplanation("Analysis temporarily unavailable. The AI service may be rate-limited or unavailable.")
+      setExplanation("Analysis unavailable. Check ANTHROPIC_API_KEY configuration.")
     }
     finally { setExplaining(false) }
   }
