@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useUser } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
-import { getMarketStatuses } from "@/lib/market-hours"
+import { getMarketStatuses, MarketStatus } from "@/lib/market-hours"
 
 type Props = {
   onOpenCommand: () => void
@@ -24,10 +24,17 @@ function marketSessionNow() {
 export function HeaderStrip({ onOpenCommand }: Props) {
   const { user, isLoaded } = useUser()
   const [clock, setClock] = useState(() => marketSessionNow())
+  const [markets, setMarkets] = useState<MarketStatus[]>([])
 
   useEffect(() => {
     const t = setInterval(() => setClock(marketSessionNow()), 1000)
     return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    setMarkets(getMarketStatuses())
+    const interval = setInterval(() => setMarkets(getMarketStatuses()), 60000)
+    return () => clearInterval(interval)
   }, [])
 
   return (
@@ -36,7 +43,7 @@ export function HeaderStrip({ onOpenCommand }: Props) {
         <span className="wm-brand">QUANTORACLE</span>
         <span className="wm-sep">|</span>
         <span className="wm-mono">IST {clock.ist}</span>
-        {getMarketStatuses().map(m => (
+        {markets.map(m => (
           <span key={m.name} style={{
             fontFamily: 'var(--font-pixel)',
             fontSize: '7px',

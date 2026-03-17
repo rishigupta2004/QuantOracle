@@ -174,23 +174,23 @@ export function ChartPanel({ symbol }: { symbol: string }) {
     })
 
     rsiSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.05, bottom: 0.68 },
+      scaleMargins: { top: 0.02, bottom: 0.68 },
     })
 
     macdHistogramSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.73, bottom: 0.45 },
+      scaleMargins: { top: 0.36, bottom: 0.34 },
     })
 
     macdSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.73, bottom: 0.45 },
+      scaleMargins: { top: 0.36, bottom: 0.34 },
     })
 
     macdSignalSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.73, bottom: 0.45 },
+      scaleMargins: { top: 0.36, bottom: 0.34 },
     })
 
     volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.95, bottom: 0 },
+      scaleMargins: { top: 0.70, bottom: 0.02 },
     })
 
     indicatorChartRef.current = indicatorChart
