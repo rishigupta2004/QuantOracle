@@ -1,316 +1,546 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { createChart, CandlestickSeries, LineSeries, HistogramSeries, ColorType, CrosshairMode, LineStyle, CandlestickData, Time, HistogramData } from "lightweight-charts"
+import { useEffect, useRef, useState, useCallback } from "react"
+import {
+  createChart, CandlestickSeries, LineSeries, HistogramSeries,
+  ColorType, CrosshairMode, LineStyle,
+  CandlestickData, Time, HistogramData, IChartApi, ISeriesApi,
+} from "lightweight-charts"
 
-type ChartData = {
-  time: string
-  open: number
-  high: number
-  low: number
-  close: number
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type ChartData = { time: string; open: number; high: number; low: number; close: number }
+type Period = "1wk" | "1mo" | "3mo" | "6mo" | "1y" | "2y" | "5y" | "max"
+
+type Tooltip = {
+  visible: boolean; x: number; y: number
+  time: string; open: number; high: number; low: number; close: number
+  volume: number; ema21: number; ema55: number; change: number; changePct: number
 }
 
-type SignalData = {
-  verdict: "BUY" | "SELL" | "HOLD"
-  score: number
-  confidence: number
-  trend: string
-  momentum: string
-  reversion: string
-  volume: string
-  rsi: number
-  macd_hist: number
-  atr: number
-  adx: number
-  vwap: number
-  pe: number
-  pb: number
-  roe: number
-  mkt_cap: number
-  factor_decile: number
-  top_factor: string
+type CompareSymbol = { symbol: string; data: { time: string; value: number }[]; color: string; pct: number }
+
+const PERIOD_BUTTONS: { label: string; value: Period }[] = [
+  { label: "1W", value: "1wk" },
+  { label: "1M", value: "1mo" },
+  { label: "3M", value: "3mo" },
+  { label: "6M", value: "6mo" },
+  { label: "1Y", value: "1y" },
+  { label: "2Y", value: "2y" },
+  { label: "5Y", value: "5y" },
+  { label: "MAX", value: "max" },
+]
+
+const COMPARE_COLORS = ["#00ccff", "#ff8800", "#cc00ff"]
+
+function formatINR(value: number): string {
+  if (!value || !isFinite(value)) return "—"
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR",
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).format(value)
 }
+
+function formatVol(v: number): string {
+  if (v >= 1e7) return (v / 1e7).toFixed(1) + "Cr"
+  if (v >= 1e5) return (v / 1e5).toFixed(1) + "L"
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + "K"
+  return String(v)
+}
+
+function formatDateIST(time: string): string {
+  try {
+    return new Date(time).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+  } catch { return time }
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 export function ChartPanel({ symbol }: { symbol: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<any>(null)
-  const candleSeriesRef = useRef<any>(null)
-  const ema21Ref = useRef<any>(null)
-  const ema55Ref = useRef<any>(null)
-  const volumeRef = useRef<any>(null)
-  const macdRef = useRef<any>(null)
-  const rsiRef = useRef<any>(null)
-  
-  const [signal, setSignal] = useState<SignalData | null>(null)
-  const [explaining, setExplaining] = useState(false)
-  const [explanation, setExplanation] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [chartReady, setChartReady] = useState(false)
+  const chartRef = useRef<IChartApi | null>(null)
+  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
+  const ema21Ref = useRef<ISeriesApi<"Line"> | null>(null)
+  const ema55Ref = useRef<ISeriesApi<"Line"> | null>(null)
+  const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null)
+  const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null)
+  const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null)
+  const macdRef = useRef<ISeriesApi<"Histogram"> | null>(null)
+  const rsiRef = useRef<ISeriesApi<"Line"> | null>(null)
+  const compareRefs = useRef<Map<string, ISeriesApi<"Line">>>(new Map())
 
-  // Create chart once
+  const [period, setPeriod] = useState<Period>("1y")
+  const [showEMA, setShowEMA] = useState(true)
+  const [showBB, setShowBB] = useState(false)
+  const [showVOL, setShowVOL] = useState(true)
+  const [chartReady, setChartReady] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [tooltip, setTooltip] = useState<Tooltip | null>(null)
+  const tooltipRef = useRef<Tooltip | null>(null)
+
+  // Compare mode
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [compareInput, setCompareInput] = useState("")
+  const [compareSymbols, setCompareSymbols] = useState<CompareSymbol[]>([])
+  const [compareMode, setCompareMode] = useState(false)
+
+  // Raw data refs for tooltip
+  const rawCandlesRef = useRef<ChartData[]>([])
+  const rawEma21Ref = useRef<{ time: string; value: number }[]>([])
+  const rawEma55Ref = useRef<{ time: string; value: number }[]>([])
+  const rawVolumeRef = useRef<{ time: string; value: number }[]>([])
+
+  // ─── Chart Init (once) ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return
-    
+
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#8a8a8a',
-        fontSize: 11,
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: "#5a5a5a",
+        fontSize: 10,
+        fontFamily: "'JetBrains Mono', monospace",
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: '#1a1a1a', style: LineStyle.Dotted },
+        horzLines: { color: "#111111", style: LineStyle.Dotted },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: '#c8ff00', width: 1, labelBackgroundColor: '#161616' },
-        horzLine: { color: '#c8ff00', width: 1, labelBackgroundColor: '#161616' },
+        vertLine: { color: "#c8ff00", width: 1, style: LineStyle.Solid, labelBackgroundColor: "#0f0f0f" },
+        horzLine: { color: "#c8ff00", width: 1, style: LineStyle.Solid, labelBackgroundColor: "#0f0f0f" },
       },
-      rightPriceScale: {
-        borderColor: '#2a2a2a',
-        textColor: '#8a8a8a',
-      },
-      timeScale: {
-        borderColor: '#2a2a2a',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
+      rightPriceScale: { borderColor: "#1a1a1a", textColor: "#5a5a5a" },
+      leftPriceScale: { visible: false },
+      timeScale: { borderColor: "#1a1a1a", timeVisible: true, secondsVisible: false },
       handleScroll: true,
       handleScale: true,
+      width: containerRef.current.clientWidth,
+      height: containerRef.current.clientHeight,
     })
 
-    // Candlestick series — MAIN, takes 60% of height
+    // Candlestick — main pane
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#00ff88',
-      downColor: '#ff3355',
-      borderUpColor: '#00ff88',
-      borderDownColor: '#ff3355',
-      wickUpColor: '#00ff88',
-      wickDownColor: '#ff3355',
-      priceScaleId: 'right',
+      upColor: "#00ff88", downColor: "#ff3355",
+      borderUpColor: "#00ff88", borderDownColor: "#ff3355",
+      wickUpColor: "#00ff88", wickDownColor: "#ff3355",
+      priceScaleId: "right",
     })
-    candleSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.05, bottom: 0.35 },
-    })
+    candleSeries.priceScale().applyOptions({ scaleMargins: { top: 0.02, bottom: 0.30 } })
 
-    // EMA21 line
+    // EMA21
     const ema21Series = chart.addSeries(LineSeries, {
-      color: '#c8ff00',
-      lineWidth: 1,
-      priceScaleId: 'right',
-      crosshairMarkerVisible: false,
-      lastValueVisible: false,
-      priceLineVisible: false,
+      color: "#c8ff00", lineWidth: 1, priceScaleId: "right",
+      crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
     })
-    ema21Series.priceScale().applyOptions({
-      scaleMargins: { top: 0.05, bottom: 0.35 },
-    })
+    ema21Series.priceScale().applyOptions({ scaleMargins: { top: 0.02, bottom: 0.30 } })
 
-    // EMA55 line  
+    // EMA55
     const ema55Series = chart.addSeries(LineSeries, {
-      color: '#ff8800',
-      lineWidth: 1,
-      priceScaleId: 'right',
-      crosshairMarkerVisible: false,
-      lastValueVisible: false,
-      priceLineVisible: false,
+      color: "#ff8800", lineWidth: 1, priceScaleId: "right",
+      crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
     })
-    ema55Series.priceScale().applyOptions({
-      scaleMargins: { top: 0.05, bottom: 0.35 },
-    })
+    ema55Series.priceScale().applyOptions({ scaleMargins: { top: 0.02, bottom: 0.30 } })
 
-    // RSI line — sits between main chart and MACD
+    // BB Upper
+    const bbUpper = chart.addSeries(LineSeries, {
+      color: "rgba(0, 204, 255, 0.4)", lineWidth: 1, lineStyle: LineStyle.Dashed,
+      priceScaleId: "right", crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
+    })
+    bbUpper.priceScale().applyOptions({ scaleMargins: { top: 0.02, bottom: 0.30 } })
+
+    // BB Lower
+    const bbLower = chart.addSeries(LineSeries, {
+      color: "rgba(0, 204, 255, 0.4)", lineWidth: 1, lineStyle: LineStyle.Dashed,
+      priceScaleId: "right", crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
+    })
+    bbLower.priceScale().applyOptions({ scaleMargins: { top: 0.02, bottom: 0.30 } })
+
+    // RSI
     const rsiSeries = chart.addSeries(LineSeries, {
-      color: '#9b59b6',
-      lineWidth: 1,
-      priceScaleId: 'rsi',
-      lastValueVisible: true,
-      priceLineVisible: false,
+      color: "#9b59b6", lineWidth: 1, priceScaleId: "rsi",
+      lastValueVisible: true, priceLineVisible: false,
     })
-    chart.priceScale('rsi').applyOptions({
-      scaleMargins: { top: 0.48, bottom: 0.38 },
-    })
+    chart.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.72, bottom: 0.15 } })
 
-    // MACD histogram — bottom 15% above volume
-    const macdSeries = chart.addSeries(HistogramSeries, {
-      priceScaleId: 'macd',
-      color: '#26a69a',
-    })
-    chart.priceScale('macd').applyOptions({
-      scaleMargins: { top: 0.65, bottom: 0.20 },
-    })
+    // MACD histogram
+    const macdSeries = chart.addSeries(HistogramSeries, { priceScaleId: "macd", color: "#26a69a" })
+    chart.priceScale("macd").applyOptions({ scaleMargins: { top: 0.87, bottom: 0.02 } })
 
-    // Volume histogram — bottom 20%
+    // Volume histogram
     const volumeSeries = chart.addSeries(HistogramSeries, {
-      priceScaleId: 'volume',
-      priceFormat: { type: 'volume' },
+      priceScaleId: "volume", priceFormat: { type: "volume" },
     })
-    chart.priceScale('volume').applyOptions({
-      scaleMargins: { top: 0.80, bottom: 0.00 },
-    })
+    chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.85, bottom: 0.00 } })
 
-    // Store refs
     chartRef.current = chart
     candleSeriesRef.current = candleSeries
     ema21Ref.current = ema21Series
     ema55Ref.current = ema55Series
+    bbUpperRef.current = bbUpper
+    bbLowerRef.current = bbLower
     rsiRef.current = rsiSeries
     macdRef.current = macdSeries
     volumeRef.current = volumeSeries
 
-    // Mark chart as ready AFTER all series are created
+    // Crosshair tooltip
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.time || !param.point) {
+        setTooltip(null)
+        tooltipRef.current = null
+        return
+      }
+      const idx = rawCandlesRef.current.findIndex(c => c.time === param.time)
+      const candle = rawCandlesRef.current[idx]
+      const vol = rawVolumeRef.current[idx]?.value ?? 0
+      const e21 = rawEma21Ref.current[idx]?.value ?? 0
+      const e55 = rawEma55Ref.current[idx]?.value ?? 0
+      if (!candle) return
+
+      const change = candle.close - candle.open
+      const changePct = (change / candle.open) * 100
+      const t: Tooltip = {
+        visible: true,
+        x: param.point.x, y: param.point.y,
+        time: typeof param.time === "string" ? param.time : String(param.time),
+        open: candle.open, high: candle.high, low: candle.low, close: candle.close,
+        volume: vol, ema21: e21, ema55: e55, change, changePct,
+      }
+      tooltipRef.current = t
+      setTooltip({ ...t })
+    })
+
     setChartReady(true)
 
     const handleResize = () => {
       if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ 
+        chartRef.current.applyOptions({
           width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight 
+          height: containerRef.current.clientHeight,
         })
       }
     }
-
     window.addEventListener("resize", handleResize)
-
     return () => {
       window.removeEventListener("resize", handleResize)
       chart.remove()
     }
   }, [])
 
-  // Fetch data when symbol changes - ONLY after chart is ready
+  // ─── Visibility toggles ─────────────────────────────────────────────────────
   useEffect(() => {
-    console.log('ChartPanel: symbol changed to:', symbol, 'chartReady:', chartReady)
-    
-    if (!chartReady) {
-      console.log('ChartPanel: chart not ready, skipping fetch')
-      return
+    ema21Ref.current?.applyOptions({ visible: showEMA })
+    ema55Ref.current?.applyOptions({ visible: showEMA })
+  }, [showEMA])
+
+  useEffect(() => {
+    bbUpperRef.current?.applyOptions({ visible: showBB })
+    bbLowerRef.current?.applyOptions({ visible: showBB })
+  }, [showBB])
+
+  useEffect(() => {
+    volumeRef.current?.applyOptions({ visible: showVOL })
+  }, [showVOL])
+
+  // ─── Data Fetch ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!chartReady) return
+
+    const clearAllSeries = () => {
+      candleSeriesRef.current?.setData([])
+      ema21Ref.current?.setData([])
+      ema55Ref.current?.setData([])
+      bbUpperRef.current?.setData([])
+      bbLowerRef.current?.setData([])
+      rsiRef.current?.setData([])
+      macdRef.current?.setData([])
+      volumeRef.current?.setData([])
     }
 
     const fetchData = async () => {
       setLoading(true)
+      clearAllSeries()
+      setTooltip(null)
       try {
-        // Add cache-busting with timestamp
-        const t = Date.now()
-        const [chartRes, signalRes] = await Promise.all([
-          fetch(`/api/chart/${encodeURIComponent(symbol)}?period=1y&t=${t}`),
-          fetch(`/api/signals/${encodeURIComponent(symbol)}?t=${t}`),
-        ])
+        const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=${period}&t=${Date.now()}`)
+        const chartData = await res.json()
+        const candles: ChartData[] = chartData.candles || []
 
-        const chartData = await chartRes.json()
-        const signalData = await signalRes.json()
+        if (candles.length > 0) {
+          // Store raw data for tooltip
+          rawCandlesRef.current = candles
+          rawEma21Ref.current = chartData.ema21 || []
+          rawEma55Ref.current = chartData.ema55 || []
+          rawVolumeRef.current = chartData.volume || []
 
-        const candles = chartData.candles || chartData.data || chartData
-
-        if (candles && candles.length > 0) {
-          console.log('ChartPanel: got', candles.length, 'candles for', symbol, 'price range:', candles[0].close, '-', candles[candles.length-1].close)
-          
-          const candleData: CandlestickData<Time>[] = candles.map((d: ChartData) => ({
+          const candleData: CandlestickData<Time>[] = candles.map((d) => ({
             time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close,
           }))
           candleSeriesRef.current?.setData(candleData)
-          ema21Ref.current?.setData(chartData.ema21 || [])
-          ema55Ref.current?.setData(chartData.ema55 || [])
-          rsiRef.current?.setData(chartData.rsi || [])
-          macdRef.current?.setData(chartData.macd_histogram || [])
-          
+          ema21Ref.current?.setData((chartData.ema21 || []).map((d: any) => ({ time: d.time as Time, value: d.value })))
+          ema55Ref.current?.setData((chartData.ema55 || []).map((d: any) => ({ time: d.time as Time, value: d.value })))
+
+          // BB: calculate from closes — 20-period SMA ± 2×stddev
+          if (chartData.ema21 && candles.length >= 20) {
+            const closes = candles.map(c => c.close)
+            const bbData = computeBB(closes, candles.map(c => c.time))
+            bbUpperRef.current?.setData(bbData.upper.map(d => ({ time: d.time as Time, value: d.value })))
+            bbLowerRef.current?.setData(bbData.lower.map(d => ({ time: d.time as Time, value: d.value })))
+          }
+
+          rsiRef.current?.setData((chartData.rsi || []).map((d: any) => ({ time: d.time as Time, value: d.value })))
+
+          // MACD — color by sign
+          const macdHistData: HistogramData<Time>[] = (chartData.macd_histogram || []).map((d: any) => ({
+            time: d.time as Time,
+            value: d.value,
+            color: d.value >= 0 ? "rgba(0,255,136,0.7)" : "rgba(255,51,85,0.7)",
+          }))
+          macdRef.current?.setData(macdHistData)
+
           const volumeData: HistogramData<Time>[] = (chartData.volume || []).map((d: any, i: number) => ({
             time: d.time as Time,
             value: d.value,
-            color: candles[i]?.close >= candles[i]?.open ? 'rgba(0,255,136,0.4)' : 'rgba(255,51,85,0.4)',
+            color: candles[i]?.close >= candles[i]?.open ? "rgba(0,255,136,0.35)" : "rgba(255,51,85,0.35)",
           }))
           volumeRef.current?.setData(volumeData)
 
-          // Fit content after setting data
-          setTimeout(() => {
-            chartRef.current?.timeScale().fitContent()
-          }, 100)
-        }
-
-        if (signalData.signal) {
-          setSignal(signalData.signal)
+          setTimeout(() => chartRef.current?.timeScale().fitContent(), 100)
         }
       } catch (err) {
-        console.error("Failed to fetch chart data:", err)
+        console.error("Chart fetch error:", err)
       } finally {
         setLoading(false)
       }
     }
-
     fetchData()
-  }, [symbol, chartReady])
+  }, [symbol, period, chartReady])
 
-  const handleExplain = async () => {
-    if (!signal) return
-    setExplaining(true)
-    setExplanation("")
-
+  // ─── Compare mode data ──────────────────────────────────────────────────────
+  const addCompareSymbol = useCallback(async () => {
+    const sym = compareInput.trim().toUpperCase()
+    if (!sym || compareSymbols.length >= 3 || compareSymbols.find(c => c.symbol === sym)) {
+      setCompareInput("")
+      return
+    }
     try {
-      const res = await fetch(`/api/ai/signal-explain?symbol=${encodeURIComponent(symbol)}`)
-      const reader = res.body?.getReader()
-      const decoder = new TextDecoder()
+      const res = await fetch(`/api/chart/${encodeURIComponent(sym)}?period=${period}&t=${Date.now()}`)
+      const data = await res.json()
+      const candles: ChartData[] = data.candles || []
+      if (candles.length === 0) return
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          setExplanation(prev => prev + decoder.decode(value))
-        }
-      }
+      // Normalize to 100 at first candle
+      const base = candles[0].close
+      const normalized = candles.map(c => ({
+        time: c.time,
+        value: ((c.close - base) / base) * 100,
+      }))
+
+      const color = COMPARE_COLORS[compareSymbols.length]
+      const series = chartRef.current?.addSeries(LineSeries, {
+        color, lineWidth: 2, priceScaleId: "compare",
+        lastValueVisible: true, priceLineVisible: false,
+      }) as ISeriesApi<"Line">
+      chartRef.current?.priceScale("compare").applyOptions({
+        scaleMargins: { top: 0.02, bottom: 0.30 },
+        visible: true,
+      })
+      series.setData(normalized.map(d => ({ time: d.time as Time, value: d.value })))
+      compareRefs.current.set(sym, series)
+
+      const lastVal = normalized[normalized.length - 1].value
+      setCompareSymbols(prev => [...prev, { symbol: sym, data: normalized, color, pct: lastVal }])
+      setCompareMode(true)
     } catch (err) {
-      console.error("Failed to get explanation:", err)
-    } finally {
-      setExplaining(false)
+      console.error("Compare fetch error:", err)
     }
-  }
+    setCompareInput("")
+  }, [compareInput, compareSymbols, period])
 
-  const getVerdictColor = (verdict: string) => {
-    switch (verdict) {
-      case "BUY": return "signal-buy"
-      case "SELL": return "signal-sell"
-      default: return "signal-hold"
+  const removeCompareSymbol = useCallback((sym: string) => {
+    const series = compareRefs.current.get(sym)
+    if (series && chartRef.current) {
+      try { chartRef.current.removeSeries(series) } catch {}
+      compareRefs.current.delete(sym)
     }
-  }
+    setCompareSymbols(prev => prev.filter(c => c.symbol !== sym))
+    if (compareSymbols.length <= 1) setCompareMode(false)
+  }, [compareSymbols])
+
+  // ─── Keyboard shortcuts ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const map: Record<string, Period> = {
+      "1": "1mo", "2": "3mo", "3": "6mo", "6": "1y",
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement
+      if (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA") return
+      if (map[e.key]) setPeriod(map[e.key])
+      if (e.key === "C" || e.key === "c") {
+        compareSymbols.forEach(c => removeCompareSymbol(c.symbol))
+        setCompareSymbols([])
+        setCompareMode(false)
+      }
+    }
+    window.addEventListener("keydown", handleKey)
+    return () => window.removeEventListener("keydown", handleKey)
+  }, [compareSymbols, removeCompareSymbol])
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+  const isNSE = symbol.endsWith(".NS") || symbol.endsWith(".BO")
 
   return (
-    <div className="chart-panel terminal-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="panel-header">
+    <div className="chart-panel terminal-panel" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Header */}
+      <div className="panel-header" style={{ flexShrink: 0 }}>
         <span className="panel-title">{symbol}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {/* Period switcher */}
+          <div style={{ display: "flex", gap: 2 }}>
+            {PERIOD_BUTTONS.map(b => (
+              <button
+                key={b.value}
+                onClick={() => setPeriod(b.value)}
+                style={{
+                  fontFamily: "var(--font-pixel)", fontSize: 7, padding: "3px 6px",
+                  background: period === b.value ? "var(--text-accent)" : "transparent",
+                  color: period === b.value ? "var(--bg-void)" : "var(--text-dim)",
+                  border: "1px solid",
+                  borderColor: period === b.value ? "var(--text-accent)" : "var(--border-dim)",
+                  cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Overlay toggles */}
+          <div style={{ display: "flex", gap: 2 }}>
+            {[
+              { key: "EMA", active: showEMA, toggle: () => setShowEMA(p => !p) },
+              { key: "BB", active: showBB, toggle: () => setShowBB(p => !p) },
+              { key: "VOL", active: showVOL, toggle: () => setShowVOL(p => !p) },
+            ].map(({ key, active, toggle }) => (
+              <button
+                key={key}
+                onClick={toggle}
+                style={{
+                  fontFamily: "var(--font-pixel)", fontSize: 7, padding: "3px 6px",
+                  background: active ? "rgba(200,255,0,0.15)" : "transparent",
+                  color: active ? "var(--text-accent)" : "var(--text-dim)",
+                  border: `1px solid ${active ? "var(--text-accent)" : "var(--border-dim)"}`,
+                  cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+
+          {/* Compare mode */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {compareSymbols.map(c => (
+              <span key={c.symbol} style={{
+                fontFamily: "var(--font-mono)", fontSize: 10,
+                color: c.color, display: "flex", alignItems: "center", gap: 3,
+              }}>
+                {c.symbol.replace(".NS", "")} {c.pct >= 0 ? "+" : ""}{c.pct.toFixed(1)}%
+                <button
+                  onClick={() => removeCompareSymbol(c.symbol)}
+                  style={{ background: "none", border: "none", color: c.color, cursor: "pointer", fontSize: 10, padding: 0 }}
+                >×</button>
+              </span>
+            ))}
+            {compareSymbols.length < 3 && (
+              compareOpen ? (
+                <input
+                  autoFocus
+                  value={compareInput}
+                  onChange={e => setCompareInput(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key === "Enter") addCompareSymbol(); if (e.key === "Escape") setCompareOpen(false) }}
+                  placeholder="HDFCBANK.NS"
+                  style={{
+                    fontFamily: "var(--font-mono)", fontSize: 10, width: 110,
+                    background: "var(--bg-raised)", border: "1px solid var(--border-mid)",
+                    color: "var(--text-primary)", padding: "2px 6px", outline: "none",
+                  }}
+                />
+              ) : (
+                <button
+                  onClick={() => setCompareOpen(true)}
+                  style={{
+                    fontFamily: "var(--font-pixel)", fontSize: 7, padding: "3px 6px",
+                    background: "transparent", border: "1px solid var(--border-dim)",
+                    color: "var(--text-dim)", cursor: "pointer",
+                  }}
+                >+COMPARE</button>
+              )
+            )}
+          </div>
+        </div>
       </div>
-      <div 
-        ref={containerRef} 
-        style={{ 
-          width: '100%', 
-          height: '100%', 
-          position: 'relative',
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
+
+      {/* Chart container */}
+      <div ref={containerRef} style={{ flex: 1, position: "relative", minHeight: 0 }}>
         {loading && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
+          <div style={{
+            position: "absolute", inset: 0, display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 10,
+          }}>
             <span className="pixel-loader" />
           </div>
         )}
+
+        {/* Crosshair tooltip — top-left */}
+        {tooltip && (
+          <div style={{
+            position: "absolute", top: 12, left: 12, zIndex: 20, pointerEvents: "none",
+            background: "rgba(10,10,10,0.95)", border: "1px solid var(--border-mid)",
+            padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10,
+            lineHeight: 1.6, color: "var(--text-secondary)", minWidth: 200,
+          }}>
+            <div style={{ color: "var(--text-accent)", fontSize: 9, marginBottom: 4 }}>
+              {symbol}  |  {formatDateIST(tooltip.time)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+              <span>O: <span style={{ color: "var(--text-primary)" }}>{isNSE ? formatINR(tooltip.open) : tooltip.open.toFixed(2)}</span></span>
+              <span>H: <span style={{ color: "#00ff88" }}>{isNSE ? formatINR(tooltip.high) : tooltip.high.toFixed(2)}</span></span>
+              <span>L: <span style={{ color: "#ff3355" }}>{isNSE ? formatINR(tooltip.low) : tooltip.low.toFixed(2)}</span></span>
+              <span>C: <span style={{ color: tooltip.change >= 0 ? "#00ff88" : "#ff3355" }}>{isNSE ? formatINR(tooltip.close) : tooltip.close.toFixed(2)}</span></span>
+            </div>
+            <div style={{ marginTop: 4, borderTop: "1px solid var(--border-dim)", paddingTop: 4 }}>
+              <span>Vol: <span style={{ color: "var(--text-primary)" }}>{formatVol(tooltip.volume)}</span></span>
+              {"  "}
+              <span style={{ color: tooltip.changePct >= 0 ? "#00ff88" : "#ff3355" }}>
+                {tooltip.change >= 0 ? "+" : ""}{tooltip.changePct.toFixed(2)}%
+              </span>
+            </div>
+            {(tooltip.ema21 > 0 || tooltip.ema55 > 0) && (
+              <div style={{ marginTop: 4, borderTop: "1px solid var(--border-dim)", paddingTop: 4, display: "flex", gap: 12 }}>
+                {tooltip.ema21 > 0 && <span>EMA21: <span style={{ color: "#c8ff00" }}>{Math.round(tooltip.ema21).toLocaleString("en-IN")}</span></span>}
+                {tooltip.ema55 > 0 && <span>EMA55: <span style={{ color: "#ff8800" }}>{Math.round(tooltip.ema55).toLocaleString("en-IN")}</span></span>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      {signal && (
-        <div className="chart-badge-overlay">
-          <span className={`pixel-badge ${getVerdictColor(signal.verdict)}`}>
-            {signal.verdict} {signal.score > 0 ? "+" : ""}{signal.score.toFixed(2)}
-          </span>
-          <button className="chart-explain-btn" onClick={handleExplain} disabled={explaining}>
-            ◎ Explain
-          </button>
-        </div>
-      )}
-      {explanation && (
-        <div className="chart-explain-stream">
-          {explanation}
-        </div>
-      )}
     </div>
   )
+}
+
+// ─── Bollinger Bands ───────────────────────────────────────────────────────────
+function computeBB(closes: number[], times: string[], period = 20, mult = 2) {
+  const upper: { time: string; value: number }[] = []
+  const lower: { time: string; value: number }[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) continue
+    const slice = closes.slice(i - period + 1, i + 1)
+    const mean = slice.reduce((a, b) => a + b, 0) / period
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period
+    const std = Math.sqrt(variance)
+    upper.push({ time: times[i], value: mean + mult * std })
+    lower.push({ time: times[i], value: mean - mult * std })
+  }
+  return { upper, lower }
 }

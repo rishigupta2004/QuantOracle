@@ -9,6 +9,7 @@ const chartCache = new Map<string, { data: unknown; expires: number }>()
 
 async function fetchFromYahoo(symbol: string, period: string = "1y") {
   const rangeMap: Record<string, string> = {
+    "1wk": "5d",
     "1mo": "1mo",
     "3mo": "3mo",
     "6mo": "6mo",

@@ -1,5 +1,6 @@
 "use client"
 
+import { useCallback } from "react"
 import { BacktestResult } from "./types"
 
 type Props = {
@@ -13,6 +14,44 @@ function formatPct(v: number) {
 
 function formatRatio(v: number) {
   return v.toFixed(2)
+}
+
+// Tiny SVG line chart — model vs benchmark
+function ReturnChart({ data }: { data: { date: string; model: number; benchmark: number }[] }) {
+  if (data.length < 2) return <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 9 }}>No data</div>
+  const w = 400, h = 80
+  const allVals = data.flatMap(d => [d.model, d.benchmark])
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals)
+  const range = maxV - minV || 1
+  const toX = (i: number) => (i / (data.length - 1)) * w
+  const toY = (v: number) => h - ((v - minV) / range) * (h - 8) - 4
+  const pathFor = (key: "model" | "benchmark") =>
+    data.map((d, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(d[key]).toFixed(1)}`).join(" ")
+  return (
+    <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: "block", overflow: "visible" }}>
+      <path d={pathFor("benchmark")} stroke="#4a4a4a" strokeWidth="1" fill="none" />
+      <path d={pathFor("model")} stroke="#c8ff00" strokeWidth="1.5" fill="none" />
+    </svg>
+  )
+}
+
+// IC bar chart — green/red bars
+function IcChart({ data }: { data: { period: string; ic: number }[] }) {
+  if (data.length < 2) return <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 9 }}>No data</div>
+  const w = 400, h = 60
+  const maxAbs = Math.max(...data.map(d => Math.abs(d.ic)), 0.01)
+  const barW = Math.max(2, (w / data.length) - 1)
+  return (
+    <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }}>
+      <line x1="0" y1={h / 2} x2={w} y2={h / 2} stroke="#2a2a2a" strokeWidth="1" />
+      {data.map((d, i) => {
+        const barH = (Math.abs(d.ic) / maxAbs) * (h / 2 - 4)
+        const x = i * (w / data.length)
+        const y = d.ic >= 0 ? h / 2 - barH : h / 2
+        return <rect key={i} x={x} y={y} width={barW} height={barH} fill={d.ic >= 0 ? "rgba(0,255,136,0.7)" : "rgba(255,51,85,0.7)"} />
+      })}
+    </svg>
+  )
 }
 
 export function BacktestResults({ result, onReset }: Props) {
@@ -98,15 +137,19 @@ export function BacktestResults({ result, onReset }: Props) {
 
       <div className="lab-chart-section">
         <h3 className="lab-chart-title">Cumulative Returns</h3>
-        <div className="lab-chart-placeholder">
-          [Chart: Model vs Benchmark - {result.cumulativeReturns.length} data points]
+        <div style={{ background: "var(--bg-base)", padding: 8, border: "1px solid var(--border-dim)" }}>
+          <div style={{ display: "flex", gap: 12, marginBottom: 6, fontSize: 9, fontFamily: "var(--font-mono)" }}>
+            <span><span style={{ color: "#c8ff00" }}>━</span> Model</span>
+            <span><span style={{ color: "#4a4a4a" }}>━</span> Nifty50</span>
+          </div>
+          <ReturnChart data={result.cumulativeReturns} />
         </div>
       </div>
 
       <div className="lab-chart-section">
         <h3 className="lab-chart-title">Walk-Forward IC</h3>
-        <div className="lab-chart-placeholder">
-          [Chart: IC Series - {result.icSeries.length} periods]
+        <div style={{ background: "var(--bg-base)", padding: 8, border: "1px solid var(--border-dim)" }}>
+          <IcChart data={result.icSeries} />
         </div>
       </div>
 
@@ -141,8 +184,18 @@ export function BacktestResults({ result, onReset }: Props) {
       </div>
 
       <div className="lab-action-buttons">
-        <button className="lab-action-btn">Save Model</button>
-        <button className="lab-action-btn">Deploy to Screener</button>
+        <button className="lab-action-btn" onClick={() => {
+          const saved = { factors: result.factorContributions, savedAt: new Date().toISOString() }
+          localStorage.setItem("quantoracle_lab_model", JSON.stringify(saved))
+          alert("Model saved to local storage.")
+        }}>Save Model</button>
+        <button className="lab-action-btn" onClick={() => {
+          const weights = result.factorContributions.reduce((acc: Record<string,number>, fc) => {
+            acc[fc.factor] = fc.weight; return acc
+          }, {})
+          localStorage.setItem("quantoracle_screener_weights", JSON.stringify(weights))
+          alert("Model deployed. Screener will use these weights on next load.")
+        }}>Deploy to Screener</button>
         <button className="lab-action-btn" onClick={exportJson}>
           Export JSON
         </button>

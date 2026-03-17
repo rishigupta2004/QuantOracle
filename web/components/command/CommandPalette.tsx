@@ -6,7 +6,7 @@ type Props = {
   isOpen: boolean
   onClose: () => void
   onSymbolSelect?: (symbol: string) => void
-  onLayoutChange?: (layout: "research" | "screener" | "portfolio" | "lab") => void
+  onLayoutChange?: (layout: "research" | "screener" | "portfolio" | "lab" | "pulse") => void
 }
 
 const NIFTY50_SYMBOLS = [
@@ -24,6 +24,7 @@ const COMMANDS = [
   { id: "layout-research", label: "Switch to Research Layout", keywords: ["research", "chart", "home"], action: () => {} },
   { id: "layout-screener", label: "Switch to Screener", keywords: ["screener", "filter", "scan"], action: () => {} },
   { id: "layout-portfolio", label: "Switch to Portfolio", keywords: ["portfolio", "track", "positions"], action: () => {} },
+  { id: "layout-pulse", label: "Switch to Pulse View", keywords: ["pulse", "market", "dashboard", "bloomberg"], action: () => {} },
   { id: "add-watchlist", label: "Add Symbol to Watchlist", keywords: ["add", "watchlist", "favorite"], action: () => {} },
 ]
 
@@ -132,6 +133,7 @@ export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange
       if (item.id === "layout-research") onLayoutChange?.("research")
       else if (item.id === "layout-screener") onLayoutChange?.("screener")
       else if (item.id === "layout-portfolio") onLayoutChange?.("portfolio")
+      else if (item.id === "layout-pulse") onLayoutChange?.("pulse")
     } else if (item.type === "search") {
       const symbol = item.data as string
       onSymbolSelect?.(`${symbol}.NS`)

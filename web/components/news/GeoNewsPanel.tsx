@@ -6,6 +6,7 @@ type NewsItem = {
   title: string
   source: string
   pubDate: string
+  link: string | null
   tags: string[]
   risk: "high" | "medium" | "low"
 }
@@ -108,22 +109,34 @@ export function GeoNewsPanel() {
           No market-relevant news available
         </div>
       ) : (
-        news.slice(0, 6).map((item, idx) => (
-          <div key={idx} className="news-item">
-            <div className="news-headline">{item.title}</div>
-            <div className="news-meta">
-              <span>{item.source}</span>
-              <span>•</span>
-              <span>{formatTime(item.pubDate)}</span>
+        news.slice(0, 6).map((item, idx) => {
+          const inner = (
+            <>
+              <div className="news-headline">{item.title}</div>
+              <div className="news-meta">
+                <span>{item.source}</span>
+                <span>•</span>
+                <span>{formatTime(item.pubDate)}</span>
+                {item.link && <span style={{ marginLeft: 'auto', opacity: 0.5 }}>↗</span>}
+              </div>
+              <div className="news-tags">
+                {item.tags.map((tag, i) => (
+                  <span key={i} className="news-tag">{tag}</span>
+                ))}
+                <span className={`news-risk ${item.risk}`}>{item.risk.toUpperCase()} RISK</span>
+              </div>
+            </>
+          )
+          return item.link ? (
+            <a key={idx} href={item.link} target="_blank" rel="noopener noreferrer" className="news-item" style={{ display: 'block', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
+              {inner}
+            </a>
+          ) : (
+            <div key={idx} className="news-item">
+              {inner}
             </div>
-            <div className="news-tags">
-              {item.tags.map((tag, i) => (
-                <span key={i} className="news-tag">{tag}</span>
-              ))}
-              <span className={`news-risk ${item.risk}`}>{item.risk.toUpperCase()} RISK</span>
-            </div>
-          </div>
-        ))
+          )
+        })
       )}
     </div>
   )

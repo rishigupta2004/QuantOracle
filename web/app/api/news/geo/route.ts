@@ -110,6 +110,7 @@ export async function GET() {
           title: item.title,
           source: item.source_id || "Unknown",
           pubDate: item.pubDate || new Date().toISOString(),
+          link: item.link || null,
           tags: getTags(text),
           risk: getRiskLevel(text),
         }
