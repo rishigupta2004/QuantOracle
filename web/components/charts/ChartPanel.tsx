@@ -46,6 +46,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
   const [explaining, setExplaining] = useState(false)
   const [explanation, setExplanation] = useState("")
   const [loading, setLoading] = useState(true)
+  const [chartReady, setChartReady] = useState(false)
 
   // Create chart once
   useEffect(() => {
@@ -160,6 +161,9 @@ export function ChartPanel({ symbol }: { symbol: string }) {
     macdRef.current = macdSeries
     volumeRef.current = volumeSeries
 
+    // Mark chart as ready AFTER all series are created
+    setChartReady(true)
+
     const handleResize = () => {
       if (containerRef.current && chartRef.current) {
         chartRef.current.applyOptions({ 
@@ -177,16 +181,23 @@ export function ChartPanel({ symbol }: { symbol: string }) {
     }
   }, [])
 
-  // Fetch data when symbol changes
+  // Fetch data when symbol changes - ONLY after chart is ready
   useEffect(() => {
-    if (!chartRef.current || !candleSeriesRef.current) return
+    console.log('ChartPanel: symbol changed to:', symbol, 'chartReady:', chartReady)
+    
+    if (!chartReady) {
+      console.log('ChartPanel: chart not ready, skipping fetch')
+      return
+    }
 
     const fetchData = async () => {
       setLoading(true)
       try {
+        // Add cache-busting with timestamp
+        const t = Date.now()
         const [chartRes, signalRes] = await Promise.all([
-          fetch(`/api/chart/${encodeURIComponent(symbol)}?period=1y`),
-          fetch(`/api/signals/${encodeURIComponent(symbol)}`),
+          fetch(`/api/chart/${encodeURIComponent(symbol)}?period=1y&t=${t}`),
+          fetch(`/api/signals/${encodeURIComponent(symbol)}?t=${t}`),
         ])
 
         const chartData = await chartRes.json()
@@ -195,43 +206,28 @@ export function ChartPanel({ symbol }: { symbol: string }) {
         const candles = chartData.candles || chartData.data || chartData
 
         if (candles && candles.length > 0) {
+          console.log('ChartPanel: got', candles.length, 'candles for', symbol, 'price range:', candles[0].close, '-', candles[candles.length-1].close)
+          
           const candleData: CandlestickData<Time>[] = candles.map((d: ChartData) => ({
-            time: d.time as Time,
-            open: d.open,
-            high: d.high,
-            low: d.low,
-            close: d.close,
+            time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close,
           }))
           candleSeriesRef.current?.setData(candleData)
-
-          // EMA21
-          const ema21Data = chartData.ema21 || []
-          ema21Ref.current?.setData(ema21Data)
-
-          // EMA55
-          const ema55Data = chartData.ema55 || []
-          ema55Ref.current?.setData(ema55Data)
-
-          // RSI
-          const rsiData = chartData.rsi || []
-          rsiRef.current?.setData(rsiData)
-
-          // MACD histogram
-          const macdHistogramData = chartData.macd_histogram || []
-          macdRef.current?.setData(macdHistogramData)
-
-          // Volume with colors matching candles
+          ema21Ref.current?.setData(chartData.ema21 || [])
+          ema55Ref.current?.setData(chartData.ema55 || [])
+          rsiRef.current?.setData(chartData.rsi || [])
+          macdRef.current?.setData(chartData.macd_histogram || [])
+          
           const volumeData: HistogramData<Time>[] = (chartData.volume || []).map((d: any, i: number) => ({
             time: d.time as Time,
             value: d.value,
-            color: candles[i]?.close >= candles[i]?.open 
-              ? 'rgba(0,255,136,0.4)' 
-              : 'rgba(255,51,85,0.4)',
+            color: candles[i]?.close >= candles[i]?.open ? 'rgba(0,255,136,0.4)' : 'rgba(255,51,85,0.4)',
           }))
           volumeRef.current?.setData(volumeData)
 
-          // Fit content to show all data
-          chartRef.current?.timeScale().fitContent()
+          // Fit content after setting data
+          setTimeout(() => {
+            chartRef.current?.timeScale().fitContent()
+          }, 100)
         }
 
         if (signalData.signal) {
@@ -245,7 +241,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
     }
 
     fetchData()
-  }, [symbol])
+  }, [symbol, chartReady])
 
   const handleExplain = async () => {
     if (!signal) return
