@@ -261,16 +261,28 @@ export async function GET(
   }
 
   try {
-    const isNSE = symbol.endsWith(".NS")
+    let resolvedSymbol = symbol
+    let quoteSummary = await fetchQuoteSummary(resolvedSymbol)
 
-    const [quoteSummary, chartData] = await Promise.all([
-      fetchQuoteSummary(symbol),
-      fetchChartData(symbol, "2y"),
-    ])
+    // If user navigates with a bare Indian ticker (e.g., RELIANCE), try NSE/BO symbols.
+    if (!quoteSummary && !resolvedSymbol.includes(".")) {
+      const candidates = [`${resolvedSymbol}.NS`, `${resolvedSymbol}.BO`]
+      for (const candidate of candidates) {
+        const candidateSummary = await fetchQuoteSummary(candidate)
+        if (candidateSummary) {
+          resolvedSymbol = candidate
+          quoteSummary = candidateSummary
+          break
+        }
+      }
+    }
+
+    const isNSE = resolvedSymbol.endsWith(".NS") || resolvedSymbol.endsWith(".BO")
+    const chartData = await fetchChartData(resolvedSymbol, "2y")
 
     if (!quoteSummary) {
-      console.log(`Using mock data for ${symbol}`)
-      const mockData = createMockData(symbol)
+      console.log(`Using mock data for ${resolvedSymbol}`)
+      const mockData = createMockData(resolvedSymbol)
       stockCache.set(cacheKey, {
         data: mockData,
         expires: Date.now() + 60 * 60 * 1000,
@@ -297,8 +309,8 @@ export async function GET(
     const pricePosition = week52High - week52Low > 0 ? ((currentPrice - week52Low) / (week52High - week52Low)) * 100 : 50
 
     const response = {
-      symbol,
-      name: price?.shortName || price?.longName || symbol,
+      symbol: resolvedSymbol,
+      name: price?.shortName || price?.longName || resolvedSymbol,
       exchange: qt?.exchange || "Unknown",
       currency: sd?.currency || "USD",
 
@@ -315,7 +327,7 @@ export async function GET(
 
       market: {
         marketCap: sd?.marketCap?.raw ?? null,
-        marketCapFormatted: formatMarketCap(sd?.marketCap?.raw ?? null, symbol),
+        marketCapFormatted: formatMarketCap(sd?.marketCap?.raw ?? null, resolvedSymbol),
         avgVolume: sd?.averageVolume?.raw ?? null,
         avgVolumeFormatted: sd?.averageVolume?.fmt ?? "—",
         volume: sd?.volume ?? null,

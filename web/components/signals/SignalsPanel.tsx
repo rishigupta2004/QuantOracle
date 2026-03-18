@@ -407,7 +407,7 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
   const screenerLink = `https://www.screener.in/company/${symBase}/`
   const tickertapeLink = `https://www.tickertape.in/stocks/${symBase.toLowerCase()}`
   const mcLink = `https://www.moneycontrol.com/india/stockpricequote/${symBase.toLowerCase()}/${symBase.toLowerCase()}`
-  const deepDiveLink = `/stock/${symBase}`
+  const deepDiveLink = `/stock/${encodeURIComponent(symbol)}`
 
   const verdictColor = signal?.verdict === "BUY" ? "var(--signal-buy)" : signal?.verdict === "SELL" ? "var(--signal-sell)" : "var(--signal-hold)"
 

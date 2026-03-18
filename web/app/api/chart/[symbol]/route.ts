@@ -101,63 +101,71 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
   }
 
   const config = rangeMap[period] || { range: "1y", days: 365, minCandles: 50 }
-  const range = config.range
   const interval = intervalMap[period] || "1d"
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`
-  
-  const res = await fetch(url, {
-    headers: { 
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      'Accept': 'application/json',
-    },
-    next: { revalidate: 300 }
-  })
-  
-  if (!res.ok) {
-    console.warn(`Yahoo chart returned ${res.status} for ${symbol} (${period})`)
-    return null
-  }
-  
-  const json = await res.json()
-  const result = json?.chart?.result?.[0]
-  
-  if (!result || !result.timestamp || result.timestamp.length === 0) {
-    return null
-  }
-  
-  const timestamps = result.timestamp || []
-  const quote = result.indicators?.quote?.[0] || {}
-  
-  const data: { time: string; open: number; high: number; low: number; close: number }[] = []
-  const volume: { time: string; value: number; color: string }[] = []
-  
-  for (let i = 0; i < timestamps.length; i++) {
-    const time = new Date(timestamps[i] * 1000).toISOString().split("T")[0]
-    const open = quote.open?.[i]
-    const high = quote.high?.[i]
-    const low = quote.low?.[i]
-    const close = quote.close?.[i]
-    const vol = quote.volume?.[i]
-    
-    if (open === undefined || high === undefined || low === undefined || close === undefined) {
-      continue
+
+  const parseYahoo = (result: any) => {
+    if (!result || !result.timestamp || result.timestamp.length === 0) {
+      return null
     }
-    
-    data.push({ time, open, high, low, close })
-    
-    const prevClose = i > 0 ? quote.close?.[i - 1] : close
-    const volColor = i > 0 && prevClose !== undefined && close >= prevClose ? "#26a69a" : "#ef5350"
-    volume.push({ time, value: vol || 0, color: volColor })
+    const timestamps = result.timestamp || []
+    const quote = result.indicators?.quote?.[0] || {}
+    const data: { time: string; open: number; high: number; low: number; close: number }[] = []
+    const volume: { time: string; value: number; color: string }[] = []
+    for (let i = 0; i < timestamps.length; i++) {
+      const time = new Date(timestamps[i] * 1000).toISOString().split("T")[0]
+      const open = quote.open?.[i]
+      const high = quote.high?.[i]
+      const low = quote.low?.[i]
+      const close = quote.close?.[i]
+      const vol = quote.volume?.[i]
+      if (open == null || high == null || low == null || close == null) continue
+      data.push({ time, open, high, low, close })
+      const prevClose = i > 0 ? quote.close?.[i - 1] : close
+      const volColor = i > 0 && prevClose !== undefined && close >= prevClose ? "#26a69a" : "#ef5350"
+      volume.push({ time, value: vol || 0, color: volColor })
+    }
+    return data.length > 0 ? { candles: data, volume } : null
   }
-  
-  if (data.length === 0) return null
-  
-  if (data.length < config.minCandles) {
-    console.warn(`Insufficient data for ${symbol} (${period}): ${data.length} < ${config.minCandles} candles`)
+
+  const fetchRange = async (range: string) => {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        Accept: "application/json",
+      },
+      next: { revalidate: 300 },
+    })
+    if (!res.ok) {
+      console.warn(`Yahoo chart returned ${res.status} for ${symbol} (${period}/${range})`)
+      return null
+    }
+    const json = await res.json()
+    return parseYahoo(json?.chart?.result?.[0])
+  }
+
+  let parsed = await fetchRange(config.range)
+
+  // Short-range fallback: fetch a wider window and trim so 1M/3M don't go blank.
+  if ((!parsed || parsed.candles.length < config.minCandles) && (period === "1mo" || period === "3mo")) {
+    const wider = await fetchRange("6mo")
+    if (wider?.candles?.length) {
+      const targetDays = period === "1mo" ? 32 : 95
+      const cutoff = Date.now() - targetDays * 24 * 60 * 60 * 1000
+      const candles = wider.candles.filter((c) => new Date(c.time).getTime() >= cutoff)
+      const volume = wider.volume.filter((v) => new Date(v.time).getTime() >= cutoff)
+      if (candles.length > 0) {
+        parsed = { candles, volume }
+      }
+    }
+  }
+
+  if (!parsed) return null
+  if (parsed.candles.length < config.minCandles) {
+    console.warn(`Insufficient data for ${symbol} (${period}): ${parsed.candles.length} < ${config.minCandles} candles`)
     return null
   }
-  
-  return { candles: data, volume }
+  return parsed
 }
 
 function processChartData(
