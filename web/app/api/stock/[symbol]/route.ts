@@ -61,45 +61,52 @@ async function fetchChartData(symbol: string, range: string = "2y") {
   const interval = intervalMap[range] || "1d"
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`
 
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-      Accept: "application/json",
-    },
-    next: { revalidate: 300 },
-  })
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        Accept: "application/json",
+      },
+      next: { revalidate: 300 },
+    })
 
-  if (!res.ok) {
-    throw new Error(`Yahoo API returned ${res.status}`)
-  }
-
-  const json = await res.json()
-  const result = json?.chart?.result?.[0]
-
-  if (!result) {
-    throw new Error("No data returned from Yahoo")
-  }
-
-  const timestamps = result.timestamp || []
-  const quote = result.indicators?.quote?.[0] || {}
-
-  const candles: { time: string; open: number; high: number; low: number; close: number }[] = []
-
-  for (let i = 0; i < timestamps.length; i++) {
-    const time = new Date(timestamps[i] * 1000).toISOString().split("T")[0]
-    const open = quote.open?.[i]
-    const high = quote.high?.[i]
-    const low = quote.low?.[i]
-    const close = quote.close?.[i]
-
-    if (open === undefined || high === undefined || low === undefined || close === undefined) {
-      continue
+    if (!res.ok) {
+      console.error(`Yahoo chart request for ${symbol} returned status ${res.status}`)
+      return []
     }
 
-    candles.push({ time, open, high, low, close })
-  }
+    const json = await res.json()
+    const result = json?.chart?.result?.[0]
 
-  return candles
+    if (!result) {
+      console.error(`Yahoo chart response missing data for ${symbol}`)
+      return []
+    }
+
+    const timestamps = result.timestamp || []
+    const quote = result.indicators?.quote?.[0] || {}
+
+    const candles: { time: string; open: number; high: number; low: number; close: number }[] = []
+
+    for (let i = 0; i < timestamps.length; i++) {
+      const time = new Date(timestamps[i] * 1000).toISOString().split("T")[0]
+      const open = quote.open?.[i]
+      const high = quote.high?.[i]
+      const low = quote.low?.[i]
+      const close = quote.close?.[i]
+
+      if (open === undefined || high === undefined || low === undefined || close === undefined) {
+        continue
+      }
+
+      candles.push({ time, open, high, low, close })
+    }
+
+    return candles
+  } catch (err) {
+    console.error(`Chart fetch failed for ${symbol}:`, err)
+    return []
+  }
 }
 
 function formatMarketCap(value: number | null, symbol: string): string {

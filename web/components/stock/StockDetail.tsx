@@ -314,7 +314,7 @@ export function StockDetail({ symbol }: StockDetailProps) {
       window.removeEventListener("resize", handleResize)
       chart.remove()
     }
-  }, [data?.symbol])
+  }, [data?.chart?.candles, symbol])
 
   if (error) {
     return (

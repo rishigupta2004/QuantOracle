@@ -428,7 +428,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       console.error("Compare fetch error:", err)
     }
     setCompareInput("")
-  }, [compareInput, compareSymbols.length, period])
+  }, [compareInput, compareSymbols, period])
 
   const removeCompareSymbol = useCallback((sym: string) => {
     const series = compareRefs.current.get(sym)

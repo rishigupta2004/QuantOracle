@@ -4,6 +4,7 @@ import {
   SYSTEM_PROMPTS,
   getCacheKey,
   isAIConfigured,
+  type AIConfig,
 } from "@/lib/ai/service"
 import { checkRateLimit } from "@/lib/ai/ratelimit"
 
@@ -22,6 +23,8 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
+
+  const ai = body.ai as AIConfig | undefined
 
   const backtest_result = body.backtest_result as {
     annualizedReturn?: number
@@ -69,7 +72,7 @@ ${(backtest_result.factorContributions ?? [])
   const fallbackMessage =
     "Lab interpretation unavailable. Configure ANTHROPIC_API_KEY for AI-generated interpretations."
 
-  if (!isAIConfigured()) {
+  if (!isAIConfigured(ai)) {
     return new NextResponse(fallbackMessage, {
       headers: {
         "Content-Type": "text/plain",
@@ -82,6 +85,8 @@ ${(backtest_result.factorContributions ?? [])
     sharpe: (backtest_result.sharpeRatio ?? 0).toFixed(2),
     mean_ic: (backtest_result.meanIc ?? 0).toFixed(3),
     drawdown: (backtest_result.maxDrawdown ?? 0).toFixed(2),
+    aiProvider: ai?.provider || "auto",
+    aiModel: ai?.model || "default",
   })
 
   const encoder = new TextEncoder()
@@ -92,7 +97,8 @@ ${(backtest_result.factorContributions ?? [])
           SYSTEM_PROMPTS.lab_interpret,
           userMessage,
           cacheKey,
-          (chunk) => controller.enqueue(encoder.encode(chunk))
+          (chunk) => controller.enqueue(encoder.encode(chunk)),
+          ai
         )
       } catch (err) {
         controller.enqueue(encoder.encode("[Interpretation unavailable]"))

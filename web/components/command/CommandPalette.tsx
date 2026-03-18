@@ -1,12 +1,16 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 type Props = {
   isOpen: boolean
   onClose: () => void
   onSymbolSelect?: (symbol: string) => void
   onLayoutChange?: (layout: "research" | "screener" | "portfolio" | "lab" | "pulse") => void
+  onResearchViewChange?: (view: "compact" | "full" | "macro" | "news") => void
+  onOpenSettings?: () => void
+  onOpenLayoutCustomizer?: () => void
+  onResetLayout?: () => void
 }
 
 const NIFTY50_SYMBOLS = [
@@ -27,6 +31,13 @@ const COMMANDS = [
   { id: "layout-screener", label: "Switch to Screener", keywords: ["screener", "filter", "scan"], action: () => {} },
   { id: "layout-portfolio", label: "Switch to Portfolio", keywords: ["portfolio", "track", "positions"], action: () => {} },
   { id: "layout-pulse", label: "Switch to Pulse View", keywords: ["pulse", "market", "dashboard", "bloomberg"], action: () => {} },
+  { id: "layout-full", label: "Research Layout: Full Scroll", keywords: ["layout", "full", "macro", "news"], action: () => {} },
+  { id: "layout-compact", label: "Research Layout: Compact", keywords: ["layout", "compact"], action: () => {} },
+  { id: "layout-macro", label: "Research Layout: Macro Focus", keywords: ["layout", "macro", "calendar"], action: () => {} },
+  { id: "layout-news", label: "Research Layout: News Focus", keywords: ["layout", "news", "feed"], action: () => {} },
+  { id: "customize-layout", label: "Customize Layout", keywords: ["customize", "layout", "panels", "customize layout"], action: () => {} },
+  { id: "reset-layout", label: "Reset Layout", keywords: ["reset", "layout", "default", "reset layout"], action: () => {} },
+  { id: "settings", label: "Open AI Settings", keywords: ["settings", "/settings", "ai", "provider", "model", "key"], action: () => {} },
   { id: "add-watchlist", label: "Add Symbol to Watchlist", keywords: ["add", "watchlist", "favorite"], action: () => {} },
 ]
 
@@ -37,7 +48,16 @@ const KEYBOARD_SHORTCUTS = [
   { keys: ["Enter"], action: "Select result" },
 ]
 
-export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange }: Props) {
+export function CommandPalette({
+  isOpen,
+  onClose,
+  onSymbolSelect,
+  onLayoutChange,
+  onResearchViewChange,
+  onOpenSettings,
+  onOpenLayoutCustomizer,
+  onResetLayout,
+}: Props) {
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
@@ -91,6 +111,56 @@ export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange
     }
   }, [isOpen])
 
+  const handleSelect = useCallback(async (item: { type: "symbol" | "command" | "search"; id: string; label: string; data?: unknown }) => {
+    if (item.type === "symbol") {
+      onSymbolSelect?.(item.id)
+    } else if (item.type === "command") {
+      if (item.id === "layout-screener") onLayoutChange?.("screener")
+      else if (item.id === "layout-portfolio") onLayoutChange?.("portfolio")
+      else if (item.id === "layout-pulse") onLayoutChange?.("pulse")
+      else if (item.id === "layout-full") {
+        onLayoutChange?.("research")
+        onResearchViewChange?.("full")
+      } else if (item.id === "layout-compact") {
+        onLayoutChange?.("research")
+        onResearchViewChange?.("compact")
+      } else if (item.id === "layout-macro") {
+        onLayoutChange?.("research")
+        onResearchViewChange?.("macro")
+      } else if (item.id === "layout-news") {
+        onLayoutChange?.("research")
+        onResearchViewChange?.("news")
+      } else if (item.id === "settings") {
+        onOpenSettings?.()
+      } else if (item.id === "customize-layout") {
+        onOpenLayoutCustomizer?.()
+      } else if (item.id === "reset-layout") {
+        onResetLayout?.()
+      }
+    } else if (item.type === "search") {
+      const symbol = item.data as string
+      const fullSymbol = symbol.includes('.') ? symbol : `${symbol}.NS`
+      
+      // Verify the symbol exists before loading
+      try {
+        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(fullSymbol)}`)
+        const data = await res.json()
+        const quote = data.quotes?.[fullSymbol]
+        
+        if (quote?.price) {
+          onSymbolSelect?.(fullSymbol)
+        } else {
+          // Try without .NS suffix (for US stocks)
+          onSymbolSelect?.(symbol)
+        }
+      } catch {
+        // Just try to load it anyway
+        onSymbolSelect?.(fullSymbol)
+      }
+    }
+    onClose()
+  }, [onSymbolSelect, onLayoutChange, onResearchViewChange, onOpenSettings, onOpenLayoutCustomizer, onResetLayout, onClose])
+
   useEffect(() => {
     if (!isOpen) return
 
@@ -114,7 +184,7 @@ export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange
         e.preventDefault()
         const item = allResults[selected]
         if (item) {
-          handleSelect(item)
+          void handleSelect(item)
         }
       }
       if (e.key === "?") {
@@ -126,38 +196,7 @@ export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, allResults, selected, onClose])
-
-  const handleSelect = async (item: { type: "symbol" | "command" | "search"; id: string; label: string; data?: unknown }) => {
-    if (item.type === "symbol") {
-      onSymbolSelect?.(item.id)
-    } else if (item.type === "command") {
-      if (item.id === "layout-screener") onLayoutChange?.("screener")
-      else if (item.id === "layout-portfolio") onLayoutChange?.("portfolio")
-      else if (item.id === "layout-pulse") onLayoutChange?.("pulse")
-    } else if (item.type === "search") {
-      const symbol = item.data as string
-      const fullSymbol = symbol.includes('.') ? symbol : `${symbol}.NS`
-      
-      // Verify the symbol exists before loading
-      try {
-        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(fullSymbol)}`)
-        const data = await res.json()
-        const quote = data.quotes?.[fullSymbol]
-        
-        if (quote?.price) {
-          onSymbolSelect?.(fullSymbol)
-        } else {
-          // Try without .NS suffix (for US stocks)
-          onSymbolSelect?.(symbol)
-        }
-      } catch {
-        // Just try to load it anyway
-        onSymbolSelect?.(fullSymbol)
-      }
-    }
-    onClose()
-  }
+  }, [isOpen, allResults, selected, onClose, handleSelect])
 
   if (!isOpen) return null
 

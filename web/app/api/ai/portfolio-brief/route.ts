@@ -4,6 +4,7 @@ import {
   SYSTEM_PROMPTS,
   getCacheKey,
   isAIConfigured,
+  type AIConfig,
 } from "@/lib/ai/service"
 import { checkRateLimit } from "@/lib/ai/ratelimit"
 
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
     portfolio_metrics?: { sharpe: number; drawdown: number; sector_exposure: Record<string, number> }
     macro_events?: Array<{ name: string; date: string; impact_level: string }>
   }
+  const ai = body.ai as AIConfig | undefined
 
   if (!holdings || !Array.isArray(holdings)) {
     return NextResponse.json(
@@ -51,7 +53,7 @@ ${(macro_events ?? []).map((e) => `${e.name} on ${e.date} (${e.impact_level} imp
 
   const fallbackMessage = "Portfolio brief unavailable. Configure ANTHROPIC_API_KEY for AI-generated briefs."
 
-  if (!isAIConfigured()) {
+  if (!isAIConfigured(ai)) {
     return new NextResponse(fallbackMessage, {
       headers: {
         "Content-Type": "text/plain",
@@ -63,6 +65,8 @@ ${(macro_events ?? []).map((e) => `${e.name} on ${e.date} (${e.impact_level} imp
   const cacheKey = getCacheKey("portfolio-brief", {
     symbols: holdings.map((h) => h.symbol).sort(),
     date: new Date().toISOString().split("T")[0],
+    aiProvider: ai?.provider || "auto",
+    aiModel: ai?.model || "default",
   })
 
   const encoder = new TextEncoder()
@@ -73,7 +77,8 @@ ${(macro_events ?? []).map((e) => `${e.name} on ${e.date} (${e.impact_level} imp
           SYSTEM_PROMPTS.portfolio_brief,
           userMessage,
           cacheKey,
-          (chunk) => controller.enqueue(encoder.encode(chunk))
+          (chunk) => controller.enqueue(encoder.encode(chunk)),
+          ai
         )
       } catch (err) {
         controller.enqueue(encoder.encode("[Brief unavailable]"))

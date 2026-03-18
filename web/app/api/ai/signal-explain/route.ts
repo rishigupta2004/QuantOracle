@@ -4,6 +4,7 @@ import {
   SYSTEM_PROMPTS,
   getCacheKey,
   isAIConfigured,
+  type AIConfig,
 } from "@/lib/ai/service"
 import { checkRateLimit } from "@/lib/ai/ratelimit"
 
@@ -27,6 +28,7 @@ type SignalBody = {
   sentiment_score?: number
   headlines?: string[]
   explanation?: string
+  ai?: AIConfig
 }
 
 export async function POST(request: NextRequest) {
@@ -80,7 +82,7 @@ IC values: Trend=${Number(body.trend?.ic ?? 0).toFixed(3)}, Momentum=${Number(bo
 
   const fallbackMessage = (body.explanation as string) || "Analysis unavailable"
 
-  if (!isAIConfigured()) {
+  if (!isAIConfigured(body.ai)) {
     return new NextResponse(fallbackMessage, {
       headers: {
         "Content-Type": "text/plain",
@@ -93,6 +95,8 @@ IC values: Trend=${Number(body.trend?.ic ?? 0).toFixed(3)}, Momentum=${Number(bo
     symbol: body.symbol,
     verdict: body.verdict,
     score: Number(body.composite_score).toFixed(2),
+    aiProvider: body.ai?.provider || "auto",
+    aiModel: body.ai?.model || "default",
   })
 
   const encoder = new TextEncoder()
@@ -103,7 +107,8 @@ IC values: Trend=${Number(body.trend?.ic ?? 0).toFixed(3)}, Momentum=${Number(bo
           SYSTEM_PROMPTS.signal_explain,
           userMessage,
           cacheKey,
-          (chunk) => controller.enqueue(encoder.encode(chunk))
+          (chunk) => controller.enqueue(encoder.encode(chunk)),
+          body.ai
         )
       } catch (err) {
         controller.enqueue(encoder.encode("[Analysis unavailable]"))

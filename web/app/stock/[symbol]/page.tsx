@@ -1,4 +1,8 @@
 import { StockDetail } from "@/components/stock/StockDetail"
+import { auth } from "@clerk/nextjs/server"
+import { redirect } from "next/navigation"
+
+const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
 
 interface PageProps {
   params: Promise<{ symbol: string }>
@@ -6,6 +10,13 @@ interface PageProps {
 
 export default async function StockPage({ params }: PageProps) {
   const { symbol } = await params
+
+  if (clerkConfigured) {
+    const { userId } = await auth()
+    if (!userId) {
+      redirect(`/sign-in?redirect_url=/stock/${encodeURIComponent(symbol)}`)
+    }
+  }
 
   return <StockDetail symbol={symbol} />
 }

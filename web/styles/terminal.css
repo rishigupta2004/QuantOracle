@@ -234,6 +234,27 @@ body, #__next, .terminal-root {
   overflow-y: auto;
 }
 
+.terminal-grid-research.scrollable {
+  grid-template-rows: 1fr;
+  overflow-y: auto;
+}
+
+.terminal-grid-research.scrollable .terminal-bottom-bar {
+  max-height: 50vh;
+}
+
+.terminal-grid-research.macro-focus .terminal-bottom-bar {
+  grid-template-columns: 1.4fr 0.6fr;
+}
+
+.terminal-grid-research.news-focus .terminal-bottom-bar {
+  grid-template-columns: 0.6fr 1.4fr;
+}
+
+.terminal-grid-research.no-bottom {
+  grid-template-rows: 1fr;
+}
+
 /* Header Strip */
 .wm-header-strip {
   display: flex;

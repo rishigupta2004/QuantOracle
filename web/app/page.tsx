@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic'
 import { HeaderStrip } from "@/components/shell/HeaderStrip"
 import { CommandPalette } from "@/components/command/CommandPalette"
 import { WatchlistPanel } from "@/components/watchlist/Watchlist"
+import { SettingsModal } from "@/components/settings/SettingsModal"
+import { LayoutCustomizer, type LayoutPrefs } from "@/components/layout/LayoutCustomizer"
 
 // Dynamic imports for heavy components - client-side only
 const ChartPanel = dynamic(
@@ -67,7 +69,47 @@ const PulseView = dynamic(
 export default function Home() {
   const [activeSymbol, setActiveSymbol] = useState("RELIANCE.NS")
   const [layout, setLayout] = useState<"research"|"screener"|"portfolio"|"lab"|"pulse">("research")
+  const [researchView, setResearchView] = useState<"compact" | "full" | "macro" | "news">("compact")
   const [commandOpen, setCommandOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [layoutCustomizerOpen, setLayoutCustomizerOpen] = useState(false)
+  const [layoutPrefs, setLayoutPrefs] = useState<LayoutPrefs>({
+    showWatchlist: true,
+    showSignals: true,
+    showMacro: true,
+    showNews: true,
+  })
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("quantoracle.layout.prefs.v1")
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Partial<LayoutPrefs>
+      setLayoutPrefs((prev) => ({
+        showWatchlist:
+          typeof parsed.showWatchlist === "boolean" ? parsed.showWatchlist : prev.showWatchlist,
+        showSignals: typeof parsed.showSignals === "boolean" ? parsed.showSignals : prev.showSignals,
+        showMacro: typeof parsed.showMacro === "boolean" ? parsed.showMacro : prev.showMacro,
+        showNews: typeof parsed.showNews === "boolean" ? parsed.showNews : prev.showNews,
+      }))
+    } catch {
+      // ignore malformed storage
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem("quantoracle.layout.prefs.v1", JSON.stringify(layoutPrefs))
+  }, [layoutPrefs])
+
+  const resetLayout = () => {
+    setResearchView("compact")
+    setLayoutPrefs({
+      showWatchlist: true,
+      showSignals: true,
+      showMacro: true,
+      showNews: true,
+    })
+  }
 
   // Select symbol and always switch to chart view
   const selectSymbol = (sym: string) => {
@@ -107,20 +149,56 @@ export default function Home() {
         onClose={() => setCommandOpen(false)}
         onSymbolSelect={selectSymbol}
         onLayoutChange={setLayout}
+        onResearchViewChange={setResearchView}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenLayoutCustomizer={() => setLayoutCustomizerOpen(true)}
+        onResetLayout={resetLayout}
+      />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <LayoutCustomizer
+        isOpen={layoutCustomizerOpen}
+        onClose={() => setLayoutCustomizerOpen(false)}
+        prefs={layoutPrefs}
+        onChange={setLayoutPrefs}
+        onReset={resetLayout}
       />
 
       {layout === "research" && (
-        <div className="terminal-grid-research" style={{ flex: 1, overflow: "hidden" }}>
-          <WatchlistPanel
-            onSelectSymbol={setActiveSymbol}
-            activeSymbol={activeSymbol}
-          />
+        <div
+          className={`terminal-grid-research ${
+            researchView === "full" ? "scrollable" : ""
+          } ${researchView === "macro" ? "macro-focus" : ""} ${
+            researchView === "news" ? "news-focus" : ""
+          } ${!layoutPrefs.showMacro && !layoutPrefs.showNews ? "no-bottom" : ""}
+          `}
+          style={{
+            flex: 1,
+            overflow: "hidden",
+            gridTemplateColumns: `${
+              layoutPrefs.showWatchlist ? "200px " : ""
+            }1fr${layoutPrefs.showSignals ? " 340px" : ""}`,
+          }}
+        >
+          {layoutPrefs.showWatchlist ? (
+            <WatchlistPanel
+              onSelectSymbol={setActiveSymbol}
+              activeSymbol={activeSymbol}
+            />
+          ) : null}
           <ChartPanel symbol={activeSymbol} />
-          <SignalsPanel symbol={activeSymbol} />
-          <div className="terminal-bottom-bar">
-            <MacroCalendar />
-            <GeoNewsPanel />
-          </div>
+          {layoutPrefs.showSignals ? <SignalsPanel symbol={activeSymbol} /> : null}
+          {layoutPrefs.showMacro || layoutPrefs.showNews ? (
+            <div
+              className="terminal-bottom-bar"
+              style={{
+                gridTemplateColumns:
+                  layoutPrefs.showMacro && layoutPrefs.showNews ? "1fr 1fr" : "1fr",
+              }}
+            >
+              {layoutPrefs.showMacro ? <MacroCalendar /> : null}
+              {layoutPrefs.showNews ? <GeoNewsPanel /> : null}
+            </div>
+          ) : null}
         </div>
       )}
 

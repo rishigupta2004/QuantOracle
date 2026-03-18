@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import type { AIConfig } from "@/lib/ai/service"
+import { decryptApiKey, loadAISettings } from "@/lib/client/aiSettings"
 
 type SignalData = {
   verdict: "BUY" | "SELL" | "HOLD"
@@ -329,6 +331,17 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
     setExplanation("")
     
     try {
+      const aiSettings = await loadAISettings()
+      const decryptedKey = await decryptApiKey(aiSettings.encryptedApiKey, aiSettings.apiKeyIv)
+      const ai: AIConfig = {
+        provider: aiSettings.provider,
+        model: aiSettings.model,
+        apiKey: decryptedKey || undefined,
+        fallbackToOllama: aiSettings.fallbackToOllama,
+        ollamaModels: aiSettings.ollamaModels,
+        baseUrl: aiSettings.ollamaBaseUrl,
+      }
+
       // Make POST request with signal data as JSON body
       const res = await fetch('/api/ai/signal-explain', {
         method: 'POST',
@@ -355,6 +368,7 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
             label: signal.volume,
           },
           explanation: `Trend: ${signal.trend}, Momentum: ${signal.momentum}, RSI: ${signal.rsi.toFixed(1)}, MACD: ${signal.macd_hist.toFixed(2)}`,
+          ai,
         }),
       })
       
