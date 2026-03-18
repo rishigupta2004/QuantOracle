@@ -116,7 +116,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
   const [chartReady, setChartReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [tooltip, setTooltip] = useState<Tooltip | null>(null)
-  const tooltipRef = useRef<Tooltip | null>(null)
+  const [chartError, setChartError] = useState<string | null>(null)
   const [isLive, setIsLive] = useState(false)
 
   // Compare mode
@@ -136,6 +136,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
   const rawEma21Ref = useRef<{ time: string; value: number }[]>([])
   const rawEma55Ref = useRef<{ time: string; value: number }[]>([])
   const rawVolumeRef = useRef<{ time: string; value: number }[]>([])
+  const tooltipRef = useRef<Tooltip | null>(null)
 
   // NSE symbol check (used for live refresh)
   const isNSE = symbol.endsWith(".NS") || symbol.endsWith(".BO")
@@ -320,8 +321,13 @@ export function ChartPanel({ symbol }: { symbol: string }) {
         }
         const chartData = await res.json()
         const candles: ChartData[] = chartData.candles || []
+        
+        if (chartData.error) {
+          setChartError(chartData.error)
+        }
 
         if (candles.length > 0) {
+          setChartError(null)
           // Store raw data for tooltip
           rawCandlesRef.current = candles
           rawEma21Ref.current = chartData.ema21 || []
@@ -360,7 +366,11 @@ export function ChartPanel({ symbol }: { symbol: string }) {
           }))
           volumeRef.current?.setData(volumeData)
 
-          setTimeout(() => chartRef.current?.timeScale().fitContent(), 100)
+          if (candles.length === 0 && !chartData.error) {
+          setChartError("No chart data available for this period. Try selecting a different time range.")
+        }
+        
+        setTimeout(() => chartRef.current?.timeScale().fitContent(), 100)
         }
       } catch (err) {
         console.error("Chart fetch error:", err)
@@ -661,6 +671,32 @@ export function ChartPanel({ symbol }: { symbol: string }) {
           </div>
         )}
 
+        {chartError && !loading && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex",
+            flexDirection: "column", alignItems: "center", justifyContent: "center",
+            zIndex: 10, gap: 12,
+          }}>
+            <span style={{ fontSize: 24 }}>⚠</span>
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-secondary)",
+              textAlign: "center", maxWidth: 300, lineHeight: 1.5
+            }}>
+              {chartError}
+            </div>
+            <button
+              onClick={() => { setChartError(null); setLoading(true); }}
+              style={{
+                fontFamily: "var(--font-pixel)", fontSize: 9, padding: "6px 12px",
+                background: "transparent", border: "1px solid var(--border-mid)",
+                color: "var(--text-accent)", cursor: "pointer",
+              }}
+            >
+              RETRY
+            </button>
+          </div>
+        )}
+
         {/* Crosshair tooltip — top-left */}
         {tooltip && (
           <div style={{
@@ -698,7 +734,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       {/* Signal accuracy stats */}
       {showSignalHistory && signalStats && (
         <div style={{
-          background: "rgba(10, 10, 10, 0.88)", 
+          background: "rgba(10, 10, 10, 0.96)", 
           borderTop: "1px solid var(--border-accent)",
           borderLeft: "2px solid var(--text-accent)",
           padding: "12px 16px", 
@@ -706,8 +742,9 @@ export function ChartPanel({ symbol }: { symbol: string }) {
           fontSize: 10,
           color: "var(--text-secondary)", 
           flexShrink: 0,
-          backdropFilter: "blur(12px)",
+          backdropFilter: "blur(8px)",
           boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.5)",
+          textShadow: "0 0 10px rgba(0, 0, 0, 0.8)",
         }}>
           <div style={{ 
             color: "var(--text-accent)", fontSize: 9, fontFamily: "var(--font-pixel)",

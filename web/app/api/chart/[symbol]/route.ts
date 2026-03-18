@@ -89,18 +89,19 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
     "max": "1mo"
   }
 
-  const rangeMap: Record<string, { range: string; days: number }> = {
-    "1wk": { range: "5d", days: 7 },
-    "1mo": { range: "1mo", days: 30 },
-    "3mo": { range: "3mo", days: 90 },
-    "6mo": { range: "6mo", days: 180 },
-    "1y": { range: "1y", days: 365 },
-    "2y": { range: "2y", days: 730 },
-    "5y": { range: "5y", days: 1825 },
-    "max": { range: "max", days: 3650 }
+  const rangeMap: Record<string, { range: string; days: number; minCandles: number }> = {
+    "1wk": { range: "5d", days: 7, minCandles: 3 },
+    "1mo": { range: "1mo", days: 30, minCandles: 10 },
+    "3mo": { range: "3mo", days: 90, minCandles: 20 },
+    "6mo": { range: "6mo", days: 180, minCandles: 30 },
+    "1y": { range: "1y", days: 365, minCandles: 50 },
+    "2y": { range: "2y", days: 730, minCandles: 80 },
+    "5y": { range: "5y", days: 1825, minCandles: 100 },
+    "max": { range: "max", days: 3650, minCandles: 100 }
   }
 
-  const range = rangeMap[period]?.range || "1y"
+  const config = rangeMap[period] || { range: "1y", days: 365, minCandles: 50 }
+  const range = config.range
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`
   
   const res = await fetch(url, {
@@ -148,6 +149,11 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
   }
   
   if (data.length === 0) return null
+  
+  if (data.length < config.minCandles) {
+    console.warn(`Insufficient data for ${symbol} (${period}): ${data.length} < ${config.minCandles} candles`)
+    return null
+  }
   
   return { candles: data, volume }
 }
@@ -330,10 +336,10 @@ export async function GET(
     
     if (!chartData) {
       chartCache.set(cacheKey, {
-        data: { candles: [], ema21: [], ema55: [], rsi: [], macd_histogram: [], volume: [] },
-        expires: Date.now() + 5 * 60 * 1000,
+        data: { error: "Insufficient data from Yahoo Finance", candles: [], ema21: [], ema55: [], rsi: [], macd_histogram: [], volume: [] },
+        expires: Date.now() + 30 * 1000,
       })
-      return NextResponse.json({ candles: [], ema21: [], ema55: [], rsi: [], macd_histogram: [], volume: [] })
+      return NextResponse.json({ error: "Insufficient data from Yahoo Finance", candles: [], ema21: [], ema55: [], rsi: [], macd_histogram: [], volume: [] })
     }
     
     const processedData = processChartData(chartData.candles, chartData.volume)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import {
   createChart,
@@ -217,11 +217,18 @@ export function StockDetail({ symbol }: StockDetailProps) {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
   const router = useRouter()
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/stock/${encodeURIComponent(symbol)}?t=${Date.now()}`)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      
+      const res = await fetch(`/api/stock/${encodeURIComponent(symbol)}?t=${Date.now()}`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || "Failed to fetch data")
@@ -229,15 +236,19 @@ export function StockDetail({ symbol }: StockDetailProps) {
       const json = await res.json()
       setData(json)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error")
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError("Request timed out. Please try again.")
+      } else {
+        setError(err instanceof Error ? err.message : "Unknown error")
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [symbol])
 
   useEffect(() => {
     fetchData()
-  }, [symbol])
+  }, [fetchData])
 
   // Chart initialization
   useEffect(() => {

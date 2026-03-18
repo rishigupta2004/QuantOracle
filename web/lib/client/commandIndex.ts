@@ -174,12 +174,6 @@ export function buildCommandIndex(args: BuildArgs): CommandAction[] {
       run: () => args.setActivePanel("map")
     },
     {
-      id: "layout-1",
-      label: "Set layout Research",
-      keywords: ["layout", "research", "1"],
-      run: () => args.setLayoutPreset("atlas")
-    },
-    {
       id: "layout-2",
       label: "Set layout Screener",
       keywords: ["layout", "screener", "2"],

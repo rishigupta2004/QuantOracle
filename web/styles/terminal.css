@@ -226,6 +226,12 @@ body, #__next, .terminal-root {
   grid-template-columns: 1fr 1fr;
   gap: 1px;
   background: var(--border-dim);
+  overflow: hidden;
+}
+
+.terminal-bottom-bar > * {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Header Strip */
@@ -439,10 +445,10 @@ body, #__next, .terminal-root {
 /* Panel Styles */
 .terminal-panel {
   background: var(--bg-panel);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .terminal-panel-header {

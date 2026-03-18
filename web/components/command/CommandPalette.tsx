@@ -24,7 +24,6 @@ const NIFTY50_SYMBOLS = [
 ]
 
 const COMMANDS = [
-  { id: "layout-research", label: "Switch to Research Layout", keywords: ["research", "chart", "home"], action: () => {} },
   { id: "layout-screener", label: "Switch to Screener", keywords: ["screener", "filter", "scan"], action: () => {} },
   { id: "layout-portfolio", label: "Switch to Portfolio", keywords: ["portfolio", "track", "positions"], action: () => {} },
   { id: "layout-pulse", label: "Switch to Pulse View", keywords: ["pulse", "market", "dashboard", "bloomberg"], action: () => {} },
@@ -133,8 +132,7 @@ export function CommandPalette({ isOpen, onClose, onSymbolSelect, onLayoutChange
     if (item.type === "symbol") {
       onSymbolSelect?.(item.id)
     } else if (item.type === "command") {
-      if (item.id === "layout-research") onLayoutChange?.("research")
-      else if (item.id === "layout-screener") onLayoutChange?.("screener")
+      if (item.id === "layout-screener") onLayoutChange?.("screener")
       else if (item.id === "layout-portfolio") onLayoutChange?.("portfolio")
       else if (item.id === "layout-pulse") onLayoutChange?.("pulse")
     } else if (item.type === "search") {
