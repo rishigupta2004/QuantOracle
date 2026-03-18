@@ -239,6 +239,21 @@ export function StockDetail({ symbol }: StockDetailProps) {
         throw new Error(err.error || "Failed to fetch data")
       }
       const json = await res.json()
+      // If embedded chart payload is empty (commonly due upstream throttling),
+      // fetch chart from the dedicated chart API which has broader fallbacks.
+      if (!json?.chart?.candles?.length) {
+        try {
+          const chartRes = await fetch(`/api/chart/${encodeURIComponent(json.symbol || symbol)}?period=2y&t=${Date.now()}`)
+          if (chartRes.ok) {
+            const chartJson = await chartRes.json()
+            if (Array.isArray(chartJson?.candles) && chartJson.candles.length > 0) {
+              json.chart = { ...(json.chart || {}), candles: chartJson.candles }
+            }
+          }
+        } catch {
+          // Keep original payload; UI will show unavailable message if still empty.
+        }
+      }
       setData(json)
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {

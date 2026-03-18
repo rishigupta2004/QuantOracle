@@ -738,17 +738,17 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       {/* Signal accuracy stats */}
       {showSignalHistory && signalStats && (
         <div style={{
-          background: "rgba(8, 8, 10, 0.995)",
+          background: "#05070b",
           borderTop: "1px solid var(--border-accent)",
           borderLeft: "2px solid var(--text-accent)",
-          padding: "12px 16px", 
+          padding: "14px 18px",
           fontFamily: "var(--font-mono)", 
-          fontSize: 11,
-          color: "var(--text-secondary)", 
+          fontSize: 12,
+          color: "#d7d7d7",
           flexShrink: 0,
-          backdropFilter: "blur(10px)",
-          boxShadow: "0 -6px 24px rgba(0, 0, 0, 0.65)",
-          textShadow: "0 0 2px rgba(0, 0, 0, 1)",
+          backdropFilter: "none",
+          boxShadow: "0 -2px 0 rgba(0, 0, 0, 0.9) inset",
+          textShadow: "none",
         }}>
           <div style={{ 
             color: "var(--text-accent)", fontSize: 9, fontFamily: "var(--font-pixel)",
@@ -758,13 +758,13 @@ export function ChartPanel({ symbol }: { symbol: string }) {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
             <div>
-              <span style={{ color: "var(--text-dim)" }}>Total signals:</span>{" "}
-              <span style={{ color: "var(--text-primary)" }}>{signalStats.total}</span>
+              <span style={{ color: "#8e8e8e" }}>Total signals:</span>{" "}
+              <span style={{ color: "#f2f2f2" }}>{signalStats.total}</span>
               {" "}(<span style={{ color: "#00ff88" }}>{signalStats.buy_count} BUY</span>,{" "}
               <span style={{ color: "#ff3355" }}>{signalStats.sell_count} SELL</span>)
             </div>
             <div>
-              <span style={{ color: "var(--text-dim)" }}>Correct:</span>{" "}
+              <span style={{ color: "#8e8e8e" }}>Correct:</span>{" "}
               <span style={{ color: signalStats.hit_rate >= 60 ? "#00ff88" : signalStats.hit_rate >= 40 ? "#ffaa00" : "#ff3355" }}>
                 {signalStats.correct}/{signalStats.total} = {signalStats.hit_rate}% hit rate
               </span>
@@ -793,7 +793,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
           {signalStats.best_signal && signalStats.worst_signal && (
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border-dim)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
               <div>
-                <span style={{ color: "var(--text-dim)" }}>Best:</span>{" "}
+                <span style={{ color: "#8e8e8e" }}>Best:</span>{" "}
                 <span style={{ color: signalStats.best_signal.verdict === "BUY" ? "#00ff88" : "#ff3355" }}>
                   {signalStats.best_signal.verdict}
                 </span>{" "}
@@ -801,7 +801,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
                 <span style={{ color: "#00ff88" }}>+{signalStats.best_signal.forward_5d_return}%</span>
               </div>
               <div>
-                <span style={{ color: "var(--text-dim)" }}>Worst:</span>{" "}
+                <span style={{ color: "#8e8e8e" }}>Worst:</span>{" "}
                 <span style={{ color: signalStats.worst_signal.verdict === "BUY" ? "#00ff88" : "#ff3355" }}>
                   {signalStats.worst_signal.verdict}
                 </span>{" "}

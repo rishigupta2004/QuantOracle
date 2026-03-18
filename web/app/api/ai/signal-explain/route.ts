@@ -81,6 +81,26 @@ IC values: Trend=${Number(body.trend?.ic ?? 0).toFixed(3)}, Momentum=${Number(bo
 `.trim()
 
   const fallbackMessage = (body.explanation as string) || "Analysis unavailable"
+  const host = request.headers.get("host") || ""
+  const baseUrl = (body.ai?.baseUrl || "").toLowerCase()
+  const wantsOllama =
+    body.ai?.provider === "ollama" ||
+    body.ai?.fallbackToOllama === true ||
+    (body.ai?.ollamaModels?.length || 0) > 0
+  const localOllamaUrl = baseUrl.includes("127.0.0.1") || baseUrl.includes("localhost")
+  const hostedRuntime = host.includes("vercel.app") || (!host.includes("localhost") && !host.includes("127.0.0.1"))
+
+  if (wantsOllama && localOllamaUrl && hostedRuntime) {
+    return new NextResponse(
+      "Ollama is configured for local host (127.0.0.1), but this app is running on Vercel. Use a cloud provider key in AI Settings, or run QuantOracle locally with Ollama running on your machine.",
+      {
+        headers: {
+          "Content-Type": "text/plain",
+          "X-Fallback": "true",
+        },
+      }
+    )
+  }
 
   if (!isAIConfigured(body.ai)) {
     return new NextResponse(fallbackMessage, {
@@ -111,7 +131,11 @@ IC values: Trend=${Number(body.trend?.ic ?? 0).toFixed(3)}, Momentum=${Number(bo
           body.ai
         )
       } catch (err) {
-        controller.enqueue(encoder.encode("[Analysis unavailable]"))
+        const message =
+          wantsOllama && hostedRuntime
+            ? "[Analysis unavailable: Ollama is not reachable from hosted runtime. Configure a cloud key or run locally.]"
+            : "[Analysis unavailable]"
+        controller.enqueue(encoder.encode(message))
       } finally {
         controller.close()
       }
