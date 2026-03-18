@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useRef } from "react"
+import { createPortal } from "react-dom"
 
 type ImpactLevel = "HIGH" | "MEDIUM" | "LOW"
 
@@ -623,19 +624,33 @@ function MacroEventRow({
 }) {
   const nextDate = getNextDate(event)
   const histSummary = getHistoricalSummary(event)
-  const [showTooltip, setShowTooltip] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [isPinned, setIsPinned] = useState(false)
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   
   const explanation = EVENT_EXPLANATIONS[event.id]
+  const showTooltip = (hovered || isPinned) && Boolean(explanation)
+
+  const updateTooltipPos = () => {
+    const rect = tooltipRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setTooltipPos({
+      top: Math.max(12, rect.top - 12),
+      left: Math.min(window.innerWidth - 170, Math.max(170, rect.left + rect.width / 2)),
+    })
+  }
   
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (tooltipRef.current && !tooltipRef.current.contains(e.target as Node)) {
-        setShowTooltip(false)
+        setHovered(false)
+        setIsPinned(false)
       }
     }
     if (showTooltip) {
       document.addEventListener('mousedown', handleClickOutside)
+      updateTooltipPos()
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showTooltip])
@@ -652,17 +667,23 @@ function MacroEventRow({
         cursor: 'help',
         position: 'relative',
       }}
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-      onClick={() => setShowTooltip(!showTooltip)}
+      onMouseEnter={() => {
+        setHovered(true)
+        updateTooltipPos()
+      }}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => {
+        setIsPinned((prev) => !prev)
+        updateTooltipPos()
+      }}
     >
-      {showTooltip && explanation && (
+      {showTooltip && explanation && tooltipPos && createPortal(
         <div style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 100,
+          position: 'fixed',
+          top: tooltipPos.top,
+          left: tooltipPos.left,
+          transform: 'translate(-50%, -100%)',
+          zIndex: 9999,
           width: 300,
           background: 'rgba(10, 10, 15, 0.98)',
           border: '1px solid var(--border-accent)',
@@ -726,7 +747,8 @@ function MacroEventRow({
             borderRight: '6px solid transparent',
             borderTop: '6px solid var(--border-accent)',
           }} />
-        </div>
+        </div>,
+        document.body
       )}
       
       <div className="macro-event-header">

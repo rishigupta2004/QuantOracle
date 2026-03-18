@@ -91,8 +91,8 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
 
   const rangeMap: Record<string, { range: string; days: number; minCandles: number }> = {
     "1wk": { range: "5d", days: 7, minCandles: 3 },
-    "1mo": { range: "1mo", days: 30, minCandles: 10 },
-    "3mo": { range: "3mo", days: 90, minCandles: 20 },
+    "1mo": { range: "1mo", days: 30, minCandles: 5 },
+    "3mo": { range: "3mo", days: 90, minCandles: 12 },
     "6mo": { range: "6mo", days: 180, minCandles: 30 },
     "1y": { range: "1y", days: 365, minCandles: 50 },
     "2y": { range: "2y", days: 730, minCandles: 80 },
@@ -102,7 +102,8 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
 
   const config = rangeMap[period] || { range: "1y", days: 365, minCandles: 50 }
   const range = config.range
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`
+  const interval = intervalMap[period] || "1d"
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`
   
   const res = await fetch(url, {
     headers: { 
@@ -113,7 +114,8 @@ async function fetchFromYahoo(symbol: string, period: string = "1y") {
   })
   
   if (!res.ok) {
-    throw new Error(`Yahoo API returned ${res.status}`)
+    console.warn(`Yahoo chart returned ${res.status} for ${symbol} (${period})`)
+    return null
   }
   
   const json = await res.json()
@@ -323,9 +325,9 @@ export async function GET(
     if (!chartData) {
       const upstoxRangeMap: Record<string, { days: number; interval: string }> = {
         "1wk": { days: 7, interval: "1week" },
-        "1mo": { days: 30, interval: "1month" },
-        "3mo": { days: 90, interval: "1month" },
-        "6mo": { days: 180, interval: "1month" },
+        "1mo": { days: 30, interval: "1day" },
+        "3mo": { days: 90, interval: "1day" },
+        "6mo": { days: 180, interval: "1day" },
         "1y": { days: 365, interval: "1day" },
         "2y": { days: 730, interval: "1day" },
         "5y": { days: 1825, interval: "1month" },
@@ -356,9 +358,9 @@ export async function GET(
     try {
       const upstoxRangeMap: Record<string, { days: number; interval: string }> = {
         "1wk": { days: 7, interval: "1week" },
-        "1mo": { days: 30, interval: "1month" },
-        "3mo": { days: 90, interval: "1month" },
-        "6mo": { days: 180, interval: "1month" },
+        "1mo": { days: 30, interval: "1day" },
+        "3mo": { days: 90, interval: "1day" },
+        "6mo": { days: 180, interval: "1day" },
         "1y": { days: 365, interval: "1day" },
         "2y": { days: 730, interval: "1day" },
         "5y": { days: 1825, interval: "1month" },

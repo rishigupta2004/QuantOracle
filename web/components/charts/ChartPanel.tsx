@@ -310,12 +310,18 @@ export function ChartPanel({ symbol }: { symbol: string }) {
 
     const fetchData = async () => {
       setLoading(true)
+      setChartError(null)
       clearAllSeries()
       setTooltip(null)
       try {
         const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=${period}&t=${Date.now()}`)
         if (!res.ok) {
-          console.error("Chart API error:", res.status)
+          const retryAfter = res.headers.get("Retry-After")
+          if (res.status === 429) {
+            setChartError(`Too many chart requests. Try again in ${retryAfter || "a few"} seconds.`)
+          } else {
+            setChartError(`Chart request failed (${res.status}).`)
+          }
           setLoading(false)
           return
         }
@@ -365,15 +371,13 @@ export function ChartPanel({ symbol }: { symbol: string }) {
             color: candles[i]?.close >= candles[i]?.open ? "rgba(0,255,136,0.35)" : "rgba(255,51,85,0.35)",
           }))
           volumeRef.current?.setData(volumeData)
-
-          if (candles.length === 0 && !chartData.error) {
+          setTimeout(() => chartRef.current?.timeScale().fitContent(), 100)
+        } else if (!chartData.error) {
           setChartError("No chart data available for this period. Try selecting a different time range.")
-        }
-        
-        setTimeout(() => chartRef.current?.timeScale().fitContent(), 100)
         }
       } catch (err) {
         console.error("Chart fetch error:", err)
+        setChartError("Unable to load chart data right now.")
       } finally {
         setLoading(false)
       }
@@ -734,17 +738,17 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       {/* Signal accuracy stats */}
       {showSignalHistory && signalStats && (
         <div style={{
-          background: "rgba(10, 10, 10, 0.96)", 
+          background: "rgba(8, 8, 10, 0.995)",
           borderTop: "1px solid var(--border-accent)",
           borderLeft: "2px solid var(--text-accent)",
           padding: "12px 16px", 
           fontFamily: "var(--font-mono)", 
-          fontSize: 10,
+          fontSize: 11,
           color: "var(--text-secondary)", 
           flexShrink: 0,
-          backdropFilter: "blur(8px)",
-          boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.5)",
-          textShadow: "0 0 10px rgba(0, 0, 0, 0.8)",
+          backdropFilter: "blur(10px)",
+          boxShadow: "0 -6px 24px rgba(0, 0, 0, 0.65)",
+          textShadow: "0 0 2px rgba(0, 0, 0, 1)",
         }}>
           <div style={{ 
             color: "var(--text-accent)", fontSize: 9, fontFamily: "var(--font-pixel)",

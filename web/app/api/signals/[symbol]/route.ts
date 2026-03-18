@@ -356,9 +356,31 @@ export async function GET(
     return NextResponse.json({ signal })
   } catch (err) {
     console.error("Signal calculation error:", err)
-    return NextResponse.json(
-      { error: "Failed to calculate signal", details: err instanceof Error ? err.message : "Unknown error" },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      signal: {
+        verdict: "HOLD",
+        score: 0,
+        confidence: 45,
+        trend: "SIDEWAYS",
+        momentum: "NEUTRAL",
+        reversion: "MEAN_REVERTING",
+        volume: "NORMAL",
+        rsi: 50,
+        macd_hist: 0,
+        atr: 0,
+        adx: 0,
+        vwap: 0,
+        fundamentals: null,
+        pe: null,
+        pb: null,
+        roe: null,
+        mkt_cap: null,
+        factor_decile: 5,
+        top_factor: "Unavailable",
+        unavailable: true,
+      },
+      error: "Failed to calculate signal",
+      details: err instanceof Error ? err.message : "Unknown error",
+    })
   }
 }

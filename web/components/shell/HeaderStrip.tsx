@@ -8,6 +8,8 @@ import { AI_SETTINGS_UPDATED_EVENT, loadAISettings } from "@/lib/client/aiSettin
 
 type Props = {
   onOpenCommand: () => void
+  onOpenSettings?: () => void
+  onOpenLayout?: () => void
 }
 
 function marketSessionNow() {
@@ -22,7 +24,7 @@ function marketSessionNow() {
   return { ist }
 }
 
-export function HeaderStrip({ onOpenCommand }: Props) {
+export function HeaderStrip({ onOpenCommand, onOpenSettings, onOpenLayout }: Props) {
   const { user, isLoaded } = useUser()
   const [clock, setClock] = useState(() => marketSessionNow())
   const [markets, setMarkets] = useState<MarketStatus[]>([])
@@ -109,6 +111,12 @@ export function HeaderStrip({ onOpenCommand }: Props) {
 
       <div className="wm-header-right">
         <span className={`wm-indicator ${aiStatusClass}`}>{aiStatus}</span>
+        <button type="button" className="wm-header-btn" onClick={onOpenLayout}>
+          Layout
+        </button>
+        <button type="button" className="wm-header-btn" onClick={onOpenSettings}>
+          AI Settings
+        </button>
         {isLoaded && user ? (
           <UserButton afterSignOutUrl="/sign-in" />
         ) : isLoaded ? (

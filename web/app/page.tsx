@@ -143,7 +143,11 @@ export default function Home() {
 
   return (
     <div className="terminal-root">
-      <HeaderStrip onOpenCommand={() => setCommandOpen(true)} />
+      <HeaderStrip
+        onOpenCommand={() => setCommandOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenLayout={() => setLayoutCustomizerOpen(true)}
+      />
       <CommandPalette
         isOpen={commandOpen}
         onClose={() => setCommandOpen(false)}

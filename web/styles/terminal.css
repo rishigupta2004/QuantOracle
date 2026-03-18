@@ -213,7 +213,7 @@ body, #__next, .terminal-root {
 .terminal-grid-research {
   display: grid;
   grid-template-columns: 200px 1fr 340px;
-  grid-template-rows: 1fr 280px;
+  grid-template-rows: 1fr 340px;
   flex: 1;
   overflow: hidden;
   gap: 1px;
@@ -227,6 +227,7 @@ body, #__next, .terminal-root {
   gap: 1px;
   background: var(--border-dim);
   overflow: hidden;
+  min-height: 280px;
 }
 
 .terminal-bottom-bar > * {
@@ -240,7 +241,7 @@ body, #__next, .terminal-root {
 }
 
 .terminal-grid-research.scrollable .terminal-bottom-bar {
-  max-height: 50vh;
+  max-height: 65vh;
 }
 
 .terminal-grid-research.macro-focus .terminal-bottom-bar {

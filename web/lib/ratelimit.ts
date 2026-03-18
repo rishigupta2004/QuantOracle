@@ -12,7 +12,7 @@ type RateLimitEntry = {
 
 const DATA_LIMITS: Record<string, RateLimitConfig> = {
   'quotes':  { max: 60,  windowMs: 60_000 },   // 60/min
-  'chart':   { max: 30,  windowMs: 60_000 },   // 30/min  
+  'chart':   { max: 120, windowMs: 60_000 },   // 120/min
   'signals': { max: 20,  windowMs: 60_000 },   // 20/min
   'screener':{ max: 10,  windowMs: 60_000 },   // 10/min
   'sectors': { max: 10,  windowMs: 60_000 },   // 10/min

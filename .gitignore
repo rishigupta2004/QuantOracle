@@ -34,6 +34,7 @@ dist/
 node_modules/
 web/.next/
 web/out/
+web/tsconfig.tsbuildinfo
 
 # QuantOracle generated data (keep `data/universe/*` tracked)
 data/ohlcv/

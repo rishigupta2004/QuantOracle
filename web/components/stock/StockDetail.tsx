@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { SettingsModal } from "@/components/settings/SettingsModal"
 import {
   createChart,
   CandlestickSeries,
@@ -82,6 +83,10 @@ type StockData = {
   }
   chart: {
     candles: { time: string; open: number; high: number; low: number; close: number }[]
+  }
+  financialSeries?: {
+    annual: { period: string; revenue: number | null; netIncome: number | null }[]
+    quarterly: { period: string; revenue: number | null; netIncome: number | null }[]
   }
   ownership: {
     insiderPercent: string | null
@@ -211,8 +216,8 @@ export function StockDetail({ symbol }: StockDetailProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("overview")
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [chartReady, setChartReady] = useState(false)
-  const chartContainerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
   const router = useRouter()
@@ -252,7 +257,7 @@ export function StockDetail({ symbol }: StockDetailProps) {
 
   // Chart initialization
   useEffect(() => {
-    if (!chartContainerRef.current || !data?.chart?.candles?.length) return
+    if (!data?.chart?.candles?.length) return
 
     const container = document.getElementById(`chart-${symbol}`)
     if (!container) return
@@ -363,6 +368,13 @@ export function StockDetail({ symbol }: StockDetailProps) {
             <ArrowLeft className="w-4 h-4 text-[var(--text-dim)]" />
             <span className="text-sm font-mono text-[var(--text-dim)]">Back to Terminal</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="px-3 py-2 bg-[var(--bg-raised)] border border-[var(--border-dim)] hover:bg-[var(--bg-hover)] transition-colors text-sm font-mono text-[var(--text-secondary)]"
+          >
+            AI Settings
+          </button>
         </div>
         
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -447,6 +459,7 @@ export function StockDetail({ symbol }: StockDetailProps) {
         {activeTab === "peers" && <PeersTab data={data} symbol={symbol} />}
         {activeTab === "filings" && <FilingsTab data={data} symbol={symbol} />}
       </div>
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }
@@ -459,7 +472,13 @@ function OverviewTab({ data, symbol }: { data: StockData; symbol: string }) {
         <div className="p-3 border-b border-[var(--border-dim)]">
           <span className="pixel-label">2Y CHART</span>
         </div>
-        <div id={`chart-${symbol}`} className="h-[300px]" />
+        <div id={`chart-${symbol}`} className="h-[300px]">
+          {data.chart.candles.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-[var(--text-dim)]">
+              Chart data unavailable for this symbol.
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Key Stats */}
@@ -558,6 +577,21 @@ function OverviewTab({ data, symbol }: { data: StockData; symbol: string }) {
 }
 
 function FinancialsTab({ data, symbol }: { data: StockData; symbol: string }) {
+  const annualSeries = (data.financialSeries?.annual || []).slice(-6)
+  const maxValue = annualSeries.reduce((max, row) => {
+    const rev = row.revenue || 0
+    const ni = row.netIncome || 0
+    return Math.max(max, rev, ni)
+  }, 0)
+
+  const formatLarge = (value: number | null) => {
+    if (value == null) return "—"
+    if (Math.abs(value) >= 1e12) return `${(value / 1e12).toFixed(2)}T`
+    if (Math.abs(value) >= 1e9) return `${(value / 1e9).toFixed(2)}B`
+    if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(2)}M`
+    return value.toLocaleString()
+  }
+
   return (
     <div className="space-y-4">
       <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)]">
@@ -565,8 +599,47 @@ function FinancialsTab({ data, symbol }: { data: StockData; symbol: string }) {
           <span className="pixel-label">REVENUE & PROFIT TRENDS</span>
         </div>
         <div className="p-4">
-          <div id={`financials-chart-${symbol}`} className="h-[250px] flex items-center justify-center text-[var(--text-dim)]">
-            Chart visualization coming soon
+          <div id={`financials-chart-${symbol}`} className="h-[250px] overflow-y-auto">
+            {annualSeries.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[var(--text-dim)]">
+                Financial statement trend data unavailable for this symbol.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {annualSeries.map((row) => {
+                  const revenueWidth = maxValue > 0 && row.revenue ? Math.max(3, Math.round((row.revenue / maxValue) * 100)) : 0
+                  const netIncomeWidth = maxValue > 0 && row.netIncome ? Math.max(3, Math.round((row.netIncome / maxValue) * 100)) : 0
+                  return (
+                    <div key={row.period} className="border border-[var(--border-dim)] p-2 bg-[var(--bg-raised)]">
+                      <div className="flex justify-between text-xs mb-2">
+                        <span className="font-mono text-[var(--text-secondary)]">{row.period}</span>
+                        <span className="font-mono text-[var(--text-dim)]">Revenue / Net Income</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex justify-between text-[10px] mb-1">
+                            <span className="text-[var(--text-dim)]">Revenue</span>
+                            <span className="font-mono text-[var(--text-primary)]">{formatLarge(row.revenue)}</span>
+                          </div>
+                          <div className="h-2 bg-[var(--bg-panel)]">
+                            <div className="h-full bg-[var(--text-accent)]" style={{ width: `${revenueWidth}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] mb-1">
+                            <span className="text-[var(--text-dim)]">Net Income</span>
+                            <span className="font-mono text-[var(--signal-buy)]">{formatLarge(row.netIncome)}</span>
+                          </div>
+                          <div className="h-2 bg-[var(--bg-panel)]">
+                            <div className="h-full bg-[var(--signal-buy)]" style={{ width: `${netIncomeWidth}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -648,7 +721,11 @@ function SignalsTab({ data, symbol }: { data: StockData; symbol: string }) {
         const res = await fetch(`/api/signals/${encodeURIComponent(symbol)}?t=${Date.now()}`)
         if (res.ok) {
           const json = await res.json()
-          setSignalData(json.signal)
+          if (json.signal?.unavailable) {
+            setSignalData(null)
+          } else {
+            setSignalData(json.signal)
+          }
         }
       } catch (err) {
         console.error("Signal fetch error:", err)
@@ -670,14 +747,16 @@ function SignalsTab({ data, symbol }: { data: StockData; symbol: string }) {
     )
   }
 
-  const signal = signalData || {
-    verdict: "HOLD",
-    confidence: 50,
-    trend: "SIDEWAYS",
-    rsi: 50,
-    momentum: "NEUTRAL",
-    volume: "NORMAL",
+  if (!signalData) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)] p-8 text-center text-[var(--text-dim)]">
+          Signal metrics are currently unavailable for this symbol.
+        </div>
+      </div>
+    )
   }
+  const signal = signalData
 
   return (
     <div className="space-y-4">
@@ -695,7 +774,7 @@ function SignalsTab({ data, symbol }: { data: StockData; symbol: string }) {
             </div>
             <div className="text-center p-4 bg-[var(--bg-raised)] border border-[var(--border-dim)]">
               <div className="text-[var(--text-dim)] text-xs uppercase mb-2">Confidence</div>
-              <div className="font-mono text-xl text-[var(--text-primary)]">{signal.confidence || 50}%</div>
+              <div className="font-mono text-xl text-[var(--text-primary)]">{signal.confidence ?? "—"}{signal.confidence != null ? "%" : ""}</div>
             </div>
             <div className="text-center p-4 bg-[var(--bg-raised)] border border-[var(--border-dim)]">
               <div className="text-[var(--text-dim)] text-xs uppercase mb-2">Trend</div>
@@ -708,26 +787,26 @@ function SignalsTab({ data, symbol }: { data: StockData; symbol: string }) {
                   <Minus className="w-4 h-4 text-[var(--signal-hold)]" />
                 )}
                 <span className="font-mono text-[var(--text-primary)]">
-                  {signal.trend?.replace("_", " ") || "SIDEWAYS"}
+                  {signal.trend?.replace("_", " ") || "—"}
                 </span>
               </div>
             </div>
             <div className="text-center p-4 bg-[var(--bg-raised)] border border-[var(--border-dim)]">
               <div className="text-[var(--text-dim)] text-xs uppercase mb-2">RSI (14)</div>
               <div className="font-mono text-xl text-[var(--text-primary)]">
-                {(signal.rsi || 50).toFixed(1)}
+                {typeof signal.rsi === "number" ? signal.rsi.toFixed(1) : "—"}
               </div>
             </div>
           </div>
 
           <div className="space-y-3">
             {[
-              { name: "Momentum", status: signal.momentum?.includes("BULL") ? "bullish" : signal.momentum?.includes("BEAR") ? "bearish" : "neutral", value: signal.momentum?.replace("_", " ") || "NEUTRAL" },
-              { name: "Volume", status: signal.volume === "SURGE" ? "above" : signal.volume === "LOW" ? "below" : "normal", value: signal.volume === "SURGE" ? "1.5x avg" : signal.volume === "LOW" ? "0.5x avg" : "Normal" },
-              { name: "RSI (14)", status: signal.rsi > 65 ? "overbought" : signal.rsi < 35 ? "oversold" : "neutral", value: (signal.rsi || 50).toFixed(1) },
-              { name: "MACD Hist", status: signal.macd_hist > 0 ? "bullish" : signal.macd_hist < 0 ? "bearish" : "neutral", value: (signal.macd_hist > 0 ? "+" : "") + (signal.macd_hist || 0).toFixed(2) },
-              { name: "ADX", status: signal.adx > 25 ? "strong" : "weak", value: (signal.adx || 0).toFixed(1) },
-              { name: "VWAP", status: signal.vwap > (data.price?.current || 0) ? "above" : "below", value: `₹${(signal.vwap || 0).toFixed(2)}` },
+              { name: "Momentum", status: signal.momentum?.includes("BULL") ? "bullish" : signal.momentum?.includes("BEAR") ? "bearish" : "neutral", value: signal.momentum?.replace("_", " ") || "—" },
+              { name: "Volume", status: signal.volume === "SURGE" ? "above" : signal.volume === "LOW" ? "below" : "normal", value: signal.volume === "SURGE" ? "1.5x avg" : signal.volume === "LOW" ? "0.5x avg" : signal.volume || "—" },
+              { name: "RSI (14)", status: typeof signal.rsi === "number" ? (signal.rsi > 65 ? "overbought" : signal.rsi < 35 ? "oversold" : "neutral") : "neutral", value: typeof signal.rsi === "number" ? signal.rsi.toFixed(1) : "—" },
+              { name: "MACD Hist", status: typeof signal.macd_hist === "number" ? (signal.macd_hist > 0 ? "bullish" : signal.macd_hist < 0 ? "bearish" : "neutral") : "neutral", value: typeof signal.macd_hist === "number" ? `${signal.macd_hist > 0 ? "+" : ""}${signal.macd_hist.toFixed(2)}` : "—" },
+              { name: "ADX", status: typeof signal.adx === "number" ? (signal.adx > 25 ? "strong" : "weak") : "neutral", value: typeof signal.adx === "number" ? signal.adx.toFixed(1) : "—" },
+              { name: "VWAP", status: typeof signal.vwap === "number" && signal.vwap > (data.price?.current || 0) ? "above" : "below", value: typeof signal.vwap === "number" ? `₹${signal.vwap.toFixed(2)}` : "—" },
             ].map((item) => (
               <div key={item.name} className="flex items-center justify-between py-2 border-b border-[var(--border-dim)]">
                 <span className="text-[var(--text-secondary)] font-mono text-sm">{item.name}</span>
@@ -755,8 +834,8 @@ function SignalsTab({ data, symbol }: { data: StockData; symbol: string }) {
           <div className="p-4">
             <div className="space-y-3">
               {[
-                { name: "Top Factor", decile: signal.factor_decile || 5, value: signal.top_factor },
-                { name: "Score", decile: Math.round((signal.score + 1) * 5), value: `${((signal.score || 0) * 100).toFixed(0)}%` },
+                { name: "Top Factor", decile: signal.factor_decile || 5, value: signal.top_factor || "—" },
+                { name: "Score", decile: typeof signal.score === "number" ? Math.round((signal.score + 1) * 5) : 5, value: typeof signal.score === "number" ? `${(signal.score * 100).toFixed(0)}%` : "—" },
               ].map((factor) => (
                 <div key={factor.name} className="flex items-center gap-3">
                   <span className="text-[var(--text-dim)] text-sm w-24">{factor.name}</span>
@@ -779,10 +858,10 @@ function SignalsTab({ data, symbol }: { data: StockData; symbol: string }) {
           </div>
           <div className="p-4 space-y-3">
             {[
-              { label: "ATR", value: `₹${(signal.atr || 0).toFixed(2)}`, impact: "Volatility" },
-              { label: "P/E", value: signal.pe?.toFixed(1) || "—", impact: "Valuation" },
-              { label: "P/B", value: signal.pb?.toFixed(1) || "—", impact: "Book Value" },
-              { label: "ROE", value: signal.roe ? `${signal.roe}%` : "—", impact: "Profitability" },
+              { label: "ATR", value: typeof signal.atr === "number" ? `₹${signal.atr.toFixed(2)}` : "—", impact: "Volatility" },
+              { label: "P/E", value: typeof signal.pe === "number" && signal.pe > 0 ? signal.pe.toFixed(1) : "—", impact: "Valuation" },
+              { label: "P/B", value: typeof signal.pb === "number" && signal.pb > 0 ? signal.pb.toFixed(1) : "—", impact: "Book Value" },
+              { label: "ROE", value: typeof signal.roe === "number" && signal.roe > 0 ? `${signal.roe}%` : "—", impact: "Profitability" },
             ].map((metric) => (
               <div key={metric.label} className="flex items-center justify-between py-2 border-b border-[var(--border-dim)]">
                 <span className="text-[var(--text-secondary)] text-sm">{metric.label}</span>
@@ -861,8 +940,6 @@ function PeersTab({ data, symbol }: { data: StockData; symbol: string }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  const isNSE = symbol.endsWith(".NS")
-
   useEffect(() => {
     const fetchPeers = async () => {
       try {
@@ -883,11 +960,26 @@ function PeersTab({ data, symbol }: { data: StockData; symbol: string }) {
     fetchPeers()
   }, [symbol])
 
-  const formatINR = (v: number | null | undefined, decimals = 1) => {
+  const currencySymbol = (currency?: string) => {
+    if (currency === "INR") return "₹"
+    if (currency === "EUR") return "€"
+    if (currency === "GBP") return "£"
+    if (currency === "JPY") return "¥"
+    return "$"
+  }
+
+  const formatMarketCap = (v: number | null | undefined, currency?: string) => {
     if (v == null) return "—"
-    if (v >= 1e12) return `₹${(v / 1e12).toFixed(1)}L Cr`
-    if (v >= 1e7) return `₹${(v / 1e7).toFixed(0)} Cr`
-    return `₹${v.toLocaleString("en-IN")}`
+    if (currency === "INR") {
+      if (v >= 1e12) return `₹${(v / 1e12).toFixed(1)}L Cr`
+      if (v >= 1e7) return `₹${(v / 1e7).toFixed(0)} Cr`
+      return `₹${v.toLocaleString("en-IN")}`
+    }
+    const symbol = currencySymbol(currency)
+    if (v >= 1e12) return `${symbol}${(v / 1e12).toFixed(1)}T`
+    if (v >= 1e9) return `${symbol}${(v / 1e9).toFixed(1)}B`
+    if (v >= 1e6) return `${symbol}${(v / 1e6).toFixed(1)}M`
+    return `${symbol}${v.toLocaleString("en-US")}`
   }
 
   const formatPE = (pe: number | null | undefined) => {
@@ -938,7 +1030,7 @@ function PeersTab({ data, symbol }: { data: StockData; symbol: string }) {
                     <td className={`p-3 text-right font-mono ${(peer.roe || 0) > 15 ? 'text-[var(--signal-buy)]' : 'text-[var(--text-primary)]'}`}>
                       {peer.roe ? `${peer.roe}%` : "—"}
                     </td>
-                    <td className="p-3 text-right font-mono text-[var(--text-primary)]">{formatINR(peer.market_cap)}</td>
+                    <td className="p-3 text-right font-mono text-[var(--text-primary)]">{formatMarketCap(peer.market_cap, peer.currency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1079,16 +1171,64 @@ function OwnershipTab({ data, symbol }: { data: StockData; symbol: string }) {
 }
 
 function FilingsTab({ data, symbol }: { data: StockData; symbol: string }) {
+  const [items, setItems] = useState<Array<{ id: string; title: string; date: string; source: string; type: string; url?: string }>>([])
+  const [loading, setLoading] = useState(true)
+  const [actions, setActions] = useState<{ earningsDate?: string | null; exDividendDate?: string | null; dividendRate?: string | null; dividendYield?: string | null }>({})
+
+  useEffect(() => {
+    const fetchFilings = async () => {
+      try {
+        const res = await fetch(`/api/filings/${encodeURIComponent(symbol)}?t=${Date.now()}`)
+        if (!res.ok) {
+          setItems([])
+          return
+        }
+        const json = await res.json()
+        setItems(Array.isArray(json.items) ? json.items : [])
+        setActions(json.actions || {})
+      } catch {
+        setItems([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchFilings()
+  }, [symbol])
+
   return (
     <div className="space-y-4">
       <div className="bg-[var(--bg-panel)] border border-[var(--border-dim)]">
         <div className="p-3 border-b border-[var(--border-dim)]">
           <span className="pixel-label">CORPORATE ANNOUNCEMENTS</span>
         </div>
-        <div className="p-8 text-center text-[var(--text-dim)]">
-          <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Corporate filings and announcements will appear here</p>
-        </div>
+        {loading ? (
+          <div className="p-8 text-center text-[var(--text-dim)]">Loading filings...</div>
+        ) : items.length === 0 ? (
+          <div className="p-8 text-center text-[var(--text-dim)]">
+            <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>No filings found for this symbol right now.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[var(--border-dim)]">
+            {items.map((item) => (
+              <a
+                key={item.id}
+                href={item.url || "#"}
+                target={item.url ? "_blank" : undefined}
+                rel={item.url ? "noopener noreferrer" : undefined}
+                className="block p-4 hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-mono text-sm text-[var(--text-primary)] mb-1">{item.title}</div>
+                    <div className="text-[var(--text-dim)] text-xs">{item.source} • {item.type}</div>
+                  </div>
+                  <div className="text-[var(--text-dim)] text-xs whitespace-nowrap">{item.date ? new Date(item.date).toLocaleDateString() : "—"}</div>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1099,7 +1239,7 @@ function FilingsTab({ data, symbol }: { data: StockData; symbol: string }) {
           <div className="p-4 space-y-3">
             <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
               <span className="text-[var(--text-dim)] text-sm">Next Earnings</span>
-              <span className="font-mono text-[var(--text-primary)]">Apr 15, 2026</span>
+              <span className="font-mono text-[var(--text-primary)]">{actions.earningsDate || "—"}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
               <span className="text-[var(--text-dim)] text-sm">EPS (TTM)</span>
@@ -1107,7 +1247,7 @@ function FilingsTab({ data, symbol }: { data: StockData; symbol: string }) {
             </div>
             <div className="flex justify-between items-center py-2">
               <span className="text-[var(--text-dim)] text-sm">Estimate</span>
-              <span className="font-mono text-[var(--text-accent)]">₹12.50</span>
+              <span className="font-mono text-[var(--text-accent)]">{data.fundamentals.epsTTMFormatted || "—"}</span>
             </div>
           </div>
         </div>
@@ -1119,15 +1259,15 @@ function FilingsTab({ data, symbol }: { data: StockData; symbol: string }) {
           <div className="p-4 space-y-3">
             <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
               <span className="text-[var(--text-dim)] text-sm">Dividend Yield</span>
-              <span className="font-mono text-[var(--text-primary)]">{data.fundamentals.dividendYield || "—"}</span>
+              <span className="font-mono text-[var(--text-primary)]">{actions.dividendYield || data.fundamentals.dividendYield || "—"}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-[var(--border-dim)]">
               <span className="text-[var(--text-dim)] text-sm">Last Dividend</span>
-              <span className="font-mono text-[var(--text-primary)]">₹8.00</span>
+              <span className="font-mono text-[var(--text-primary)]">{actions.dividendRate || "—"}</span>
             </div>
             <div className="flex justify-between items-center py-2">
               <span className="text-[var(--text-dim)] text-sm">Ex-Date</span>
-              <span className="font-mono text-[var(--text-accent)]">Mar 20, 2026</span>
+              <span className="font-mono text-[var(--text-accent)]">{actions.exDividendDate || "—"}</span>
             </div>
           </div>
         </div>

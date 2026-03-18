@@ -51,7 +51,7 @@ Upcoming Macro Events:
 ${(macro_events ?? []).map((e) => `${e.name} on ${e.date} (${e.impact_level} impact)`).join("\n") || "None"}
 `.trim()
 
-  const fallbackMessage = "Portfolio brief unavailable. Configure ANTHROPIC_API_KEY for AI-generated briefs."
+  const fallbackMessage = "Portfolio brief unavailable. Configure AI settings or local Ollama for AI-generated briefs."
 
   if (!isAIConfigured(ai)) {
     return new NextResponse(fallbackMessage, {

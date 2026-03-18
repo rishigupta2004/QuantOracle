@@ -25,8 +25,8 @@ async function fetchQuoteSummary(symbol: string) {
   }
 
   const endpoints = [
-    `https://query2.finance.yahoo.com/v11/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile,quoteType,institutionOwnership,majorHoldersBreakdown,insiderHolders,earningsHistory,earningsTrend,price`,
-    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile,quoteType,institutionOwnership,majorHoldersBreakdown,insiderHolders,earningsHistory,earningsTrend,price`,
+    `https://query2.finance.yahoo.com/v11/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile,quoteType,institutionOwnership,majorHoldersBreakdown,insiderHolders,earningsHistory,earningsTrend,incomeStatementHistory,incomeStatementHistoryQuarterly,price`,
+    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,financialData,assetProfile,quoteType,institutionOwnership,majorHoldersBreakdown,insiderHolders,earningsHistory,earningsTrend,incomeStatementHistory,incomeStatementHistoryQuarterly,price`,
   ]
 
   for (const url of endpoints) {
@@ -219,6 +219,14 @@ function createMockData(symbol: string) {
       floatPercent: "72.5%",
       sharesOutstandingFormatted: "750 Cr",
     },
+    financialSeries: {
+      annual: [
+        { period: "2023", revenue: 8900000000000, netIncome: 740000000000 },
+        { period: "2024", revenue: 9400000000000, netIncome: 790000000000 },
+        { period: "2025", revenue: 10100000000000, netIncome: 860000000000 },
+      ],
+      quarterly: [],
+    },
     earnings: {
       earningsDate: "2026-04-15",
     },
@@ -276,6 +284,8 @@ export async function GET(
     const ap = quoteSummary.assetProfile || {}
     const qt = quoteSummary.quoteType || {}
     const price = quoteSummary.price || {}
+    const annualIncome = quoteSummary.incomeStatementHistory?.incomeStatementHistory || []
+    const quarterlyIncome = quoteSummary.incomeStatementHistoryQuarterly?.incomeStatementHistory || []
 
     const currentPrice = price?.regularMarketPrice?.raw ?? 0
     const previousClose = price?.regularMarketPreviousClose?.raw ?? 0
@@ -386,6 +396,23 @@ export async function GET(
         sharesOutstandingFormatted: ks?.sharesOutstanding?.fmt ?? "—",
         sharesFloat: ks?.floatShares?.raw ?? null,
         sharesFloatFormatted: ks?.floatShares?.fmt ?? "—",
+      },
+
+      financialSeries: {
+        annual: annualIncome
+          .map((item: any) => ({
+            period: item?.endDate?.fmt || "",
+            revenue: item?.totalRevenue?.raw ?? null,
+            netIncome: item?.netIncome?.raw ?? null,
+          }))
+          .filter((item: any) => item.period && (item.revenue || item.netIncome)),
+        quarterly: quarterlyIncome
+          .map((item: any) => ({
+            period: item?.endDate?.fmt || "",
+            revenue: item?.totalRevenue?.raw ?? null,
+            netIncome: item?.netIncome?.raw ?? null,
+          }))
+          .filter((item: any) => item.period && (item.revenue || item.netIncome)),
       },
 
       earnings: {

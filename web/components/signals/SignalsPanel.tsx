@@ -397,7 +397,7 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
       }
     } catch (err) {
       console.error("Explain error:", err)
-      setExplanation("Analysis unavailable. Check ANTHROPIC_API_KEY configuration.")
+      setExplanation("Analysis unavailable. Check AI provider settings or local Ollama connection.")
     }
     finally { setExplaining(false) }
   }

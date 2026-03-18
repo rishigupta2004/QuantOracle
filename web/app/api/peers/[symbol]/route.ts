@@ -81,6 +81,7 @@ async function fetchPeerDataFromYahoo(symbols: string[]): Promise<any[]> {
         pb: ks.priceToBook?.raw ?? null,
         roe: fd.returnOnEquity?.raw ? (fd.returnOnEquity.raw * 100).toFixed(1) : null,
         market_cap: sd.marketCap?.raw ?? null,
+        currency: sd.currency || fd.financialCurrency || (sym.endsWith(".NS") ? "INR" : "USD"),
         sector: ap.sector || null,
         industry: ap.industry || null,
         price: sd.regularMarketPrice?.raw ?? sd.previousClose?.raw ?? null,

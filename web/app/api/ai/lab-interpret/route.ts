@@ -70,7 +70,7 @@ ${(backtest_result.factorContributions ?? [])
 `.trim()
 
   const fallbackMessage =
-    "Lab interpretation unavailable. Configure ANTHROPIC_API_KEY for AI-generated interpretations."
+    "Lab interpretation unavailable. Configure AI settings or local Ollama for AI-generated interpretations."
 
   if (!isAIConfigured(ai)) {
     return new NextResponse(fallbackMessage, {
