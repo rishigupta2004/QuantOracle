@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import dynamic from 'next/dynamic'
 import { HeaderStrip } from "@/components/shell/HeaderStrip"
-import { TickerStrip } from "@/components/shell/TickerStrip"
 import { CommandPalette } from "@/components/command/CommandPalette"
 import { WatchlistPanel } from "@/components/watchlist/Watchlist"
 

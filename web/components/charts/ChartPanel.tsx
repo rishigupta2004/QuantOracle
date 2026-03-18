@@ -358,9 +358,17 @@ export function ChartPanel({ symbol }: { symbol: string }) {
     }
     try {
       const res = await fetch(`/api/chart/${encodeURIComponent(sym)}?period=${period}&t=${Date.now()}`)
+      if (!res.ok) {
+        console.error("Compare API error:", res.status)
+        setCompareInput("")
+        return
+      }
       const data = await res.json()
       const candles: ChartData[] = data.candles || []
-      if (candles.length === 0) return
+      if (candles.length === 0) {
+        setCompareInput("")
+        return
+      }
 
       // Normalize to 100 at first candle
       const base = candles[0].close
@@ -388,7 +396,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       console.error("Compare fetch error:", err)
     }
     setCompareInput("")
-  }, [compareInput, compareSymbols, period])
+  }, [compareInput, compareSymbols.length, period])
 
   const removeCompareSymbol = useCallback((sym: string) => {
     const series = compareRefs.current.get(sym)
@@ -396,9 +404,12 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       try { chartRef.current.removeSeries(series) } catch {}
       compareRefs.current.delete(sym)
     }
-    setCompareSymbols(prev => prev.filter(c => c.symbol !== sym))
-    if (compareSymbols.length <= 1) setCompareMode(false)
-  }, [compareSymbols])
+    setCompareSymbols(prev => {
+      const newSymbols = prev.filter(c => c.symbol !== sym)
+      if (newSymbols.length <= 1) setCompareMode(false)
+      return newSymbols
+    })
+  }, [])
 
   // ─── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -658,7 +669,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       {/* Signal accuracy stats */}
       {showSignalHistory && signalStats && (
         <div style={{
-          background: "rgba(10, 10, 10, 0.97)", 
+          background: "rgba(10, 10, 10, 0.88)", 
           borderTop: "1px solid var(--border-accent)",
           borderLeft: "2px solid var(--text-accent)",
           padding: "12px 16px", 
@@ -666,7 +677,7 @@ export function ChartPanel({ symbol }: { symbol: string }) {
           fontSize: 10,
           color: "var(--text-secondary)", 
           flexShrink: 0,
-          backdropFilter: "blur(8px)",
+          backdropFilter: "blur(12px)",
           boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.5)",
         }}>
           <div style={{ 
@@ -708,16 +719,6 @@ export function ChartPanel({ symbol }: { symbol: string }) {
                 {signalStats.avg_sell_avoided <= 0 ? "" : "+"}{signalStats.avg_sell_avoided}%
               </span>
             </div>
-            <div>
-              <span style={{ color: "#ff3355" }}>SELL accuracy:</span>{" "}
-              {signalStats.sell_count > 0 
-                ? `${Math.round(signalStats.sell_count * signalStats.sell_accuracy / 100)}/${signalStats.sell_count} = ${signalStats.sell_accuracy}%`
-                : "N/A"
-              }
-              {" "}avg avoided: <span style={{ color: signalStats.avg_sell_avoided <= 0 ? "#00ff88" : "#ff3355" }}>
-                {signalStats.avg_sell_avoided <= 0 ? "" : "+"}{signalStats.avg_sell_avoided}%
-              </span>
-            </div>
           </div>
           {signalStats.best_signal && signalStats.worst_signal && (
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border-dim)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
@@ -745,15 +746,20 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       {/* Signal loading */}
       {showSignalHistory && signalLoading && (
         <div style={{
-          background: "rgba(10, 10, 10, 0.97)", 
+          background: "rgba(10, 10, 10, 0.85)", 
           borderTop: "1px solid var(--border-accent)",
-          padding: "12px", 
+          padding: "12px 16px", 
+          fontFamily: "var(--font-mono)", 
+          fontSize: 10,
+          color: "var(--text-secondary)", 
+          flexShrink: 0,
+          backdropFilter: "blur(12px)",
           display: "flex", 
           alignItems: "center", 
-          justifyContent: "center",
-          flexShrink: 0,
+          gap: 8,
         }}>
-          <span className="pixel-loader" />
+          <span className="pixel-loader" style={{ width: 12, height: 12 }} />
+          Loading signal history…
         </div>
       )}
     </div>

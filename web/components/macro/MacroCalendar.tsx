@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 
 type ImpactLevel = "HIGH" | "MEDIUM" | "LOW"
 
@@ -25,6 +25,102 @@ type MacroEvent = {
   affects_sectors: string[]
   historical_impact: HistoricalImpact
   what_to_watch: string
+  description?: string
+  how_it_affects?: string
+  volatility_level?: string
+}
+
+const EVENT_EXPLANATIONS: Record<string, { description: string; how_it_affects: string; volatility_level: string }> = {
+  "rbi-mpc": {
+    description: "The RBI's Monetary Policy Committee meets to decide the benchmark interest rate (repo rate). They assess inflation, growth, and global conditions to set monetary policy.",
+    how_it_affects: "Rate cuts → cheaper loans → more borrowing → economic growth. Rate hikes → tighter credit → lower inflation but slower growth. Banking stocks are most directly affected.",
+    volatility_level: "HIGH - Expect 1-3% Nifty movement on policy day, especially if the decision differs from expectations."
+  },
+  "india-cpi": {
+    description: "Consumer Price Index measures inflation by tracking price changes in a basket of goods and services consumed by households.",
+    how_it_affects: "High CPI (>6%) → RBI may hike rates → negative for equities. Low CPI (<4%) → rate cuts possible → positive for equities. FMCG and Consumer sectors most affected.",
+    volatility_level: "MEDIUM - Typically causes 0.5-1.5% Nifty movement."
+  },
+  "us-fomc": {
+    description: "The US Federal Reserve's policy meeting where they decide on the federal funds rate. This affects global liquidity and risk appetite.",
+    how_it_affects: "Fed rate cuts → weaker dollar → FII flows into India → positive. Fed rate hikes → stronger dollar → FII outflows → negative. IT and Banking sectors most sensitive.",
+    volatility_level: "HIGH - Global markets can move 1-2% on Fed decisions."
+  },
+  "earnings-q1": {
+    description: "Quarterly earnings season when companies report their financial results. It shows revenue growth, profit margins, and management guidance.",
+    how_it_affects: "Better-than-expected results → stock price increase → positive market sentiment. Missed expectations → selling pressure. Watch for revenue growth and margin guidance.",
+    volatility_level: "HIGH - Sector-specific moves of 2-5% based on results."
+  },
+  "union-budget": {
+    description: "Annual financial statement presented by the Finance Minister, detailing government revenue and spending plans for the fiscal year.",
+    how_it_affects: "Higher capex → infrastructure, banking benefit. Tax changes → affected sectors move. Deficit targets → impact on bond yields and rupee.",
+    volatility_level: "HIGH - Budget day typically sees 1-2% Nifty movement."
+  },
+  "fii-dii": {
+    description: "Foreign Institutional Investor and Domestic Institutional Investor flow data shows net buying/selling by overseas and Indian fund managers.",
+    how_it_affects: "FII buying → additional demand → price increase. FII selling → price pressure. DIIs often provide counterbalance. Net flows affect rupee as well.",
+    volatility_level: "MEDIUM - Daily flows cause intraday volatility of 0.3-1%."
+  },
+  "us-cpi": {
+    description: "US Consumer Price Index measuring inflation in the world's largest economy. Directly influences Fed policy decisions.",
+    how_it_affects: "High US inflation → Fed may hike → stronger dollar → FII outflows from India. Also affects IT sector revenues (denominated in dollars).",
+    volatility_level: "MEDIUM - Global markets react with 0.5-1% moves."
+  },
+  "iip": {
+    description: "Index of Industrial Production measures the manufacturing, mining, and electricity output of the industrial sector.",
+    how_it_affects: "High IIP → economic growth strong → positive for cyclicals like Auto, Capital Goods, Metals. Low IIP → weak demand concerns.",
+    volatility_level: "LOW - Typically causes 0.2-0.5% sector-specific moves."
+  },
+  "pmi": {
+    description: "Purchasing Managers' Index surveys business conditions. Above 50 indicates expansion, below 50 indicates contraction.",
+    how_it_affects: "PMI >50 → economic expansion → positive for manufacturing, auto, capital goods. PMI <50 → contraction concerns.",
+    volatility_level: "LOW - Causes 0.2-0.5% sector-specific moves."
+  },
+  "gst": {
+    description: "Goods and Services Tax collection data shows government revenue from the unified tax system. Indicates consumer demand.",
+    how_it_affects: "Higher GST collections → strong consumption → positive for consumer-facing sectors. Lower collections → weak demand concerns.",
+    volatility_level: "LOW - Minimal direct market impact, more of an economic indicator."
+  },
+  "india-gdp": {
+    description: "Gross Domestic Product measures the total economic output. Quarterly GDP shows the growth rate of the Indian economy.",
+    how_it_affects: "High GDP growth → corporate earnings growth → positive market sentiment. Low GDP → slowdown concerns → negative sentiment.",
+    volatility_level: "MEDIUM - GDP data can cause 0.5-1% Nifty movement."
+  },
+  "nifty-fo-expiry": {
+    description: "Monthly expiry of Nifty Futures and Options contracts. Large positions are squared off, causing increased volatility.",
+    how_it_affects: "Expiry weeks often see higher volatility as traders roll over or close positions. Short gamma near expiry can cause sharp moves.",
+    volatility_level: "MEDIUM - Expect choppy price action, possible volatile moves on expiry day."
+  },
+  "nifty-rebalance": {
+    description: "Semi-annual review where stocks are added or removed from the Nifty 50 index based on criteria like market cap and liquidity.",
+    how_it_affects: "Added stocks → passive buying → price increase. Removed stocks → passive selling → price decrease. Typically causes 2-5% moves in affected stocks.",
+    volatility_level: "MEDIUM - Stock-specific moves of 3-10% on inclusion/exclusion."
+  },
+  "q4-fy25-results": {
+    description: "Q4 Financial Year 2025 earnings season where companies report their March quarter results.",
+    how_it_affects: "Results beat estimates → stock rally, positive market sentiment. Miss → selling pressure. Watch for revenue growth, margins, and FY26 guidance.",
+    volatility_level: "HIGH - Sector moves of 2-5% based on aggregate results."
+  },
+  "us-nfp": {
+    description: "US Non-Farm Payrolls report shows job creation/losses in the US economy. Most important US employment indicator.",
+    how_it_affects: "Strong NFP → US economy resilient → Fed may keep rates high → negative for emerging markets. Weak NFP → rate cut hopes → positive for EMs.",
+    volatility_level: "HIGH - Can cause 1-2% global moves, especially currencies and commodities."
+  },
+  "india-monetary-policy": {
+    description: "RBI releases detailed minutes of MPC meeting, showing voting patterns and individual member views on monetary policy.",
+    how_it_affects: "Dovish minutes → rate cut expectations → positive for markets. Hawkish minutes → rate hike fears → negative. Shows policy direction ahead.",
+    volatility_level: "MEDIUM - Can cause 0.5-1% moves on release."
+  },
+  "india-trade": {
+    description: "India's monthly trade data showing exports, imports, and trade deficit. Key indicator of external sector health.",
+    how_it_affects: "Higher exports → rupee strength → positive for IT and manufacturing. Large deficit → rupee weakness → import-heavy sectors affected.",
+    volatility_level: "LOW-MEDIUM - Causes 0.2-0.5% sector-specific moves."
+  },
+  "us-retail-sales": {
+    description: "US consumer spending data, accounting for a major portion of US economic activity.",
+    how_it_affects: "Strong US consumer spending → US economy resilient → Fed may delay cuts → stronger dollar → FII outflows from India.",
+    volatility_level: "MEDIUM - Global markets react to implications for Fed policy."
+  },
 }
 
 const MACRO_EVENTS: MacroEvent[] = [
@@ -527,14 +623,112 @@ function MacroEventRow({
 }) {
   const nextDate = getNextDate(event)
   const histSummary = getHistoricalSummary(event)
+  const [showTooltip, setShowTooltip] = useState(false)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  
+  const explanation = EVENT_EXPLANATIONS[event.id]
+  
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tooltipRef.current && !tooltipRef.current.contains(e.target as Node)) {
+        setShowTooltip(false)
+      }
+    }
+    if (showTooltip) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showTooltip])
   
   return (
-    <div className="macro-event-row" style={{
-      padding: '6px',
-      marginBottom: '4px',
-      background: 'rgba(255, 255, 255, 0.02)',
-      borderLeft: '2px solid var(--border-dim)',
-    }}>
+    <div 
+      ref={tooltipRef}
+      className="macro-event-row" 
+      style={{
+        padding: '6px',
+        marginBottom: '4px',
+        background: 'rgba(255, 255, 255, 0.02)',
+        borderLeft: '2px solid var(--border-dim)',
+        cursor: 'help',
+        position: 'relative',
+      }}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+      onClick={() => setShowTooltip(!showTooltip)}
+    >
+      {showTooltip && explanation && (
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 100,
+          width: 300,
+          background: 'rgba(10, 10, 15, 0.98)',
+          border: '1px solid var(--border-accent)',
+          borderRadius: 4,
+          padding: 12,
+          marginBottom: 8,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(10px)',
+        }}>
+          <div style={{ 
+            fontSize: 9, 
+            fontFamily: 'var(--font-pixel)', 
+            color: 'var(--text-accent)',
+            marginBottom: 8,
+            borderBottom: '1px solid var(--border-dim)',
+            paddingBottom: 6,
+          }}>
+            {event.name.toUpperCase()}
+          </div>
+          
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 8, color: 'var(--text-dim)', marginBottom: 3, fontFamily: 'var(--font-pixel)' }}>WHAT IS IT?</div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{explanation.description}</div>
+          </div>
+          
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 8, color: 'var(--text-dim)', marginBottom: 3, fontFamily: 'var(--font-pixel)' }}>HOW DOES IT AFFECT MARKETS?</div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{explanation.how_it_affects}</div>
+          </div>
+          
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 8, color: 'var(--text-dim)', marginBottom: 3, fontFamily: 'var(--font-pixel)' }}>WHAT TO WATCH</div>
+            <div style={{ fontSize: 10, color: 'var(--text-accent)', lineHeight: 1.4 }}>{event.what_to_watch}</div>
+          </div>
+          
+          <div style={{ 
+            padding: '6px 8px', 
+            background: 'rgba(200, 255, 0, 0.05)', 
+            border: '1px solid var(--border-dim)',
+            borderRadius: 3,
+          }}>
+            <div style={{ fontSize: 8, color: 'var(--text-dim)', marginBottom: 3, fontFamily: 'var(--font-pixel)' }}>EXPECTED VOLATILITY</div>
+            <div style={{ fontSize: 10, color: 'var(--signal-hold)', lineHeight: 1.4 }}>{explanation.volatility_level}</div>
+          </div>
+          
+          {histSummary && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 8, color: 'var(--text-dim)', marginBottom: 3, fontFamily: 'var(--font-pixel)' }}>HISTORICAL AVERAGE IMPACT</div>
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{histSummary}</div>
+            </div>
+          )}
+          
+          <div style={{
+            position: 'absolute',
+            bottom: -6,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 0,
+            height: 0,
+            borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent',
+            borderTop: '6px solid var(--border-accent)',
+          }} />
+        </div>
+      )}
+      
       <div className="macro-event-header">
         <span className="macro-event-name">{event.short}</span>
         <span 

@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import { IBM_Plex_Mono, JetBrains_Mono, Press_Start_2P } from "next/font/google"
 import { ClerkProvider } from "@clerk/nextjs"
+import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 import "./globals.css"
 import "@/styles/terminal.css"
@@ -22,6 +24,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body className="font-mono antialiased">
           <TickerStrip />
           {children}
+          <Analytics />
+          <SpeedInsights />
         </body>
       </html>
     </ClerkProvider>

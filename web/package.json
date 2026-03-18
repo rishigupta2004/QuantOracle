@@ -13,6 +13,8 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@clerk/nextjs": "^5.7.5",
     "@supabase/supabase-js": "^2.99.1",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "clsx": "^2.1.1",
     "lightweight-charts": "^5.1.0",
     "lucide-react": "^0.577.0",
