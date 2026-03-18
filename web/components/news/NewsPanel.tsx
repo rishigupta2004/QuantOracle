@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import Image from "next/image"
 import { getCompanyName } from "@/lib/universe"
 
@@ -46,7 +46,7 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
   const [loading, setLoading] = useState({ news: true, social: true, clips: true })
   const [sentiment, setSentiment] = useState<{ bullish: number; bearish: number; total: number } | null>(null)
 
-  const companyName = getCompanyName(symbol)
+  const companyName = useMemo(() => getCompanyName(symbol), [symbol])
 
   // Fetch news
   useEffect(() => {
@@ -54,6 +54,11 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
       setLoading(l => ({ ...l, news: true }))
       try {
         const res = await fetch(`/api/news?symbol=${encodeURIComponent(symbol)}`)
+        if (!res.ok) {
+          setNews([])
+          setLoading(l => ({ ...l, news: false }))
+          return
+        }
         const data = await res.json()
         if (data.results) {
           // Filter to symbol-relevant news
@@ -96,6 +101,11 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
       setLoading(l => ({ ...l, social: true }))
       try {
         const res = await fetch(`/api/social/${encodeURIComponent(symbol)}`)
+        if (!res.ok) {
+          setSocial([])
+          setLoading(l => ({ ...l, social: false }))
+          return
+        }
         const data = await res.json()
         if (data.messages) {
           setSocial(data.messages.slice(0, 10))
@@ -115,6 +125,11 @@ export function NewsPanel({ symbol = "RELIANCE.NS" }: Props) {
       setLoading(l => ({ ...l, clips: true }))
       try {
         const res = await fetch(`/api/clips?symbol=${encodeURIComponent(symbol)}`)
+        if (!res.ok) {
+          setClips([])
+          setLoading(l => ({ ...l, clips: false }))
+          return
+        }
         const data = await res.json()
         if (data.videos) {
           setClips(data.videos.slice(0, 6))

@@ -6,6 +6,14 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const historyCache = new Map<string, { data: unknown; expires: number }>()
+const MAX_CACHE_SIZE = 200
+
+function evictOldestCache() {
+  if (historyCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = historyCache.keys().next().value
+    if (oldestKey) historyCache.delete(oldestKey)
+  }
+}
 
 async function fetchHistoricalData(symbol: string, range: string = "1y") {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`
@@ -272,6 +280,7 @@ export async function GET(
     
     const result = { signals, stats }
     
+    evictOldestCache()
     historyCache.set(cacheKey, {
       data: result,
       expires: Date.now() + 60 * 60 * 1000,

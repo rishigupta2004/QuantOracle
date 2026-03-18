@@ -6,6 +6,14 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const signalsCache = new Map<string, { signal: unknown; expires: number }>()
+const MAX_CACHE_SIZE = 200
+
+function evictOldestCache() {
+  if (signalsCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = signalsCache.keys().next().value
+    if (oldestKey) signalsCache.delete(oldestKey)
+  }
+}
 
 async function fetchFromYahoo(symbol: string) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=3mo`
@@ -339,6 +347,7 @@ export async function GET(
   try {
     const signal = await calculateSignal(symbol)
     
+    evictOldestCache()
     signalsCache.set(symbol, {
       signal,
       expires: Date.now() + 60 * 1000,

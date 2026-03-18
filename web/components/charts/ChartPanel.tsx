@@ -77,6 +77,23 @@ function formatDateIST(time: string): string {
   } catch { return time }
 }
 
+// ─── Utility Functions ─────────────────────────────────────────────────────────
+
+function computeBB(closes: number[], times: string[], period = 20, mult = 2) {
+  const upper: { time: string; value: number }[] = []
+  const lower: { time: string; value: number }[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) continue
+    const slice = closes.slice(i - period + 1, i + 1)
+    const mean = slice.reduce((a, b) => a + b, 0) / period
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period
+    const std = Math.sqrt(variance)
+    upper.push({ time: times[i], value: mean + mult * std })
+    lower.push({ time: times[i], value: mean - mult * std })
+  }
+  return { upper, lower }
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export function ChartPanel({ symbol }: { symbol: string }) {
@@ -296,6 +313,11 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       setTooltip(null)
       try {
         const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=${period}&t=${Date.now()}`)
+        if (!res.ok) {
+          console.error("Chart API error:", res.status)
+          setLoading(false)
+          return
+        }
         const chartData = await res.json()
         const candles: ChartData[] = chartData.candles || []
 
@@ -442,6 +464,13 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       setSignalLoading(true)
       try {
         const res = await fetch(`/api/signals/history/${encodeURIComponent(symbol)}?t=${Date.now()}`)
+        if (!res.ok) {
+          console.error("Signal history API error:", res.status)
+          setSignalHistory([])
+          setSignalStats(null)
+          setSignalLoading(false)
+          return
+        }
         const data = await res.json()
         if (data.signals) {
           setSignalHistory(data.signals)
@@ -764,20 +793,4 @@ export function ChartPanel({ symbol }: { symbol: string }) {
       )}
     </div>
   )
-}
-
-// ─── Bollinger Bands ───────────────────────────────────────────────────────────
-function computeBB(closes: number[], times: string[], period = 20, mult = 2) {
-  const upper: { time: string; value: number }[] = []
-  const lower: { time: string; value: number }[] = []
-  for (let i = 0; i < closes.length; i++) {
-    if (i < period - 1) continue
-    const slice = closes.slice(i - period + 1, i + 1)
-    const mean = slice.reduce((a, b) => a + b, 0) / period
-    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period
-    const std = Math.sqrt(variance)
-    upper.push({ time: times[i], value: mean + mult * std })
-    lower.push({ time: times[i], value: mean - mult * std })
-  }
-  return { upper, lower }
 }

@@ -6,6 +6,14 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const chartCache = new Map<string, { data: unknown; expires: number }>()
+const MAX_CACHE_SIZE = 200
+
+function evictOldestCache() {
+  if (chartCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = chartCache.keys().next().value
+    if (oldestKey) chartCache.delete(oldestKey)
+  }
+}
 
 async function fetchFromUpstox(symbol: string, period: string, rangeMap: Record<string, { days: number; interval: string }>) {
   const upstoxToken = process.env.UPSTOX_ACCESS_TOKEN
@@ -330,6 +338,7 @@ export async function GET(
     
     const processedData = processChartData(chartData.candles, chartData.volume)
     
+    evictOldestCache()
     chartCache.set(cacheKey, {
       data: processedData,
       expires: Date.now() + 5 * 60 * 1000,

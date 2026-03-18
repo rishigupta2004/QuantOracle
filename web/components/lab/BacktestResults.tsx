@@ -1,6 +1,5 @@
 "use client"
 
-import { useCallback } from "react"
 import { BacktestResult } from "./types"
 
 type Props = {

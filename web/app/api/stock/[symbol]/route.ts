@@ -6,6 +6,14 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const stockCache = new Map<string, { data: unknown; expires: number }>()
+const MAX_CACHE_SIZE = 200
+
+function evictOldestCache() {
+  if (stockCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = stockCache.keys().next().value
+    if (oldestKey) stockCache.delete(oldestKey)
+  }
+}
 
 async function fetchQuoteSummary(symbol: string) {
   const HEADERS = {
@@ -92,27 +100,6 @@ async function fetchChartData(symbol: string, range: string = "2y") {
   }
 
   return candles
-}
-
-async function fetchFinancials(symbol: string) {
-  const url = `https://query1.finance.yahoo.com/ws/finance/v1/taas/financials?symbol=${encodeURIComponent(symbol)}&periodtype=TRAM&pad=yes`
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-        Accept: "application/json",
-      },
-      next: { revalidate: 3600 },
-    })
-
-    if (!res.ok) return null
-
-    const json = await res.json()
-    return json
-  } catch {
-    return null
-  }
 }
 
 function formatMarketCap(value: number | null, symbol: string): string {
@@ -267,9 +254,12 @@ export async function GET(
     ])
 
     if (!quoteSummary) {
-      // Return mock data for demo purposes when Yahoo API fails
       console.log(`Using mock data for ${symbol}`)
       const mockData = createMockData(symbol)
+      stockCache.set(cacheKey, {
+        data: mockData,
+        expires: Date.now() + 60 * 60 * 1000,
+      })
       return NextResponse.json(mockData)
     }
 
@@ -399,6 +389,7 @@ export async function GET(
       },
     }
 
+    evictOldestCache()
     stockCache.set(cacheKey, {
       data: response,
       expires: Date.now() + 5 * 60 * 1000,

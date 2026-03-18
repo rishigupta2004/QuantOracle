@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 
 type SignalData = {
   verdict: "BUY" | "SELL" | "HOLD"
@@ -290,6 +290,10 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
 
   const isFresh = signal?.lastUpdated && (Date.now() - new Date(signal.lastUpdated).getTime()) < 5 * 60 * 1000
 
+  const viewHistory = useCallback(() => {
+    window.history.back()
+  }, [])
+
   useEffect(() => {
     const fetchSignal = async () => {
       setLoading(true)
@@ -297,6 +301,11 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
       setExplanation("")
       try {
         const res = await fetch(`/api/signals/${encodeURIComponent(symbol)}?t=${Date.now()}`)
+        if (!res.ok) {
+          setError(true)
+          setLoading(false)
+          return
+        }
         const data = await res.json()
         if (data.signal) {
           setSignal(data.signal)
@@ -544,7 +553,7 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
                 </div>
               )}
               {explanation}
-              {explaining && explanation && (
+              {explaining && (
                 <span style={{
                   display: 'inline-block',
                   width: '8px', 
@@ -608,7 +617,7 @@ export function SignalsPanel({ symbol }: { symbol: string }) {
         {/* ── SIGNAL ACCURACY MINI ── */}
         <AccuracySection 
           accuracy={accuracy} 
-          onViewHistory={() => window.location.href = deepDiveLink}
+          onViewHistory={viewHistory}
         />
 
         {/* ── QUICK LINKS + DEEP DIVE ── */}

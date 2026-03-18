@@ -1,6 +1,24 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react"
+
+type THProps = { k: SortKey; label: string; sortKey: SortKey; sortDir: SortDir; toggleSort: (key: SortKey) => void }
+
+const TableHeader = memo(function TH({ k, label, sortKey, sortDir, toggleSort }: THProps) {
+  return (
+    <th
+      onClick={() => toggleSort(k)}
+      style={{
+        cursor: "pointer", fontFamily: "var(--font-pixel)", fontSize: 9,
+        color: sortKey === k ? "var(--text-accent)" : "var(--text-dim)",
+        padding: "6px 8px", textAlign: "right", userSelect: "none",
+        borderBottom: "1px solid var(--border-dim)",
+      }}
+    >
+      {label} {sortKey === k ? (sortDir === "asc" ? "↑" : "↓") : ""}
+    </th>
+  )
+})
 
 type ScreenerRow = {
   rank: number
@@ -258,9 +276,9 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
     }
   }
 
-  const sectors = Array.from(new Set(rows.map(r => r.sector).filter(Boolean))) as string[]
+  const sectors = useMemo(() => Array.from(new Set(rows.map(r => r.sector).filter(Boolean))) as string[], [rows])
 
-  const displayed = rows
+  const displayed = useMemo(() => (rows
     .filter(r => {
       if (filter) {
         const q = filter.toUpperCase()
@@ -289,20 +307,7 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
         default:           return 0
       }
     })
-
-  const TH = ({ k, label }: { k: SortKey; label: string }) => (
-    <th
-      onClick={() => toggleSort(k)}
-      style={{
-        cursor: "pointer", fontFamily: "var(--font-pixel)", fontSize: 9,
-        color: sortKey === k ? "var(--text-accent)" : "var(--text-dim)",
-        padding: "6px 8px", textAlign: "right", userSelect: "none",
-        borderBottom: "1px solid var(--border-dim)",
-      }}
-    >
-      {label} {sortKey === k ? (sortDir === "asc" ? "↑" : "↓") : ""}
-    </th>
-  )
+  ), [rows, filter, sectorFilter, signalFilter, sortKey, sortDir])
 
   if (loading) {
     return (
@@ -399,13 +404,12 @@ export function ScreenerPanel({ onSymbolSelect }: { onSymbolSelect?: (s: string)
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "auto" }}>
           <thead style={{ position: "sticky", top: 0, background: "var(--bg-panel)", zIndex: 10 }}>
             <tr>
-              <TH k="rank" label="#" />
-              <th style={{ fontFamily: "var(--font-pixel)", fontSize: 9, color: "var(--text-dim)", padding: "6px 8px", borderBottom: "1px solid var(--border-dim)", textAlign: "left" }}>SYMBOL</th>
-              <TH k="score" label="SCORE" />
-              <TH k="price" label="PRICE" />
-              <TH k="change_pct" label="CHG%" />
-              <TH k="pe" label="P/E" />
-              <TH k="momentum" label="MOM IC" />
+              <TableHeader k="rank" label="#" sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
+              <TableHeader k="score" label="SCORE" sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
+              <TableHeader k="price" label="PRICE" sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
+              <TableHeader k="change_pct" label="CHG%" sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
+              <TableHeader k="pe" label="P/E" sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
+              <TableHeader k="momentum" label="MOM IC" sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
               <th style={{ fontFamily: "var(--font-pixel)", fontSize: 9, color: "var(--text-dim)", padding: "6px 8px", borderBottom: "1px solid var(--border-dim)", textAlign: "center" }}>DECILE</th>
               <th style={{ fontFamily: "var(--font-pixel)", fontSize: 9, color: "var(--text-dim)", padding: "6px 8px", borderBottom: "1px solid var(--border-dim)", textAlign: "right" }}>SIGNAL</th>
             </tr>

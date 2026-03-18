@@ -123,12 +123,11 @@ export async function GET() {
   } catch (err) {
     console.error("Geo news API error:", err)
     
-    // Return empty news with error message for debugging
+    const newsCacheData = newsCache.news.length > 0 ? newsCache.news : []
+    
     return NextResponse.json({ 
-      news: [],
-      error: process.env.NEWSDATA_API_KEY || process.env.NEWS_DATA_API_KEY 
-        ? (err instanceof Error ? err.message : "Failed to fetch news")
-        : "NEWSDATA_API_KEY not configured - add to Vercel env vars"
+      news: newsCacheData,
+      error: "Failed to fetch news - please try again later"
     })
   }
 }
